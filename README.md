@@ -35,8 +35,51 @@ A monorepo for the next-generation personal publishing system, inspired by zette
 - [x] Add docker-compose.yml for production at project root (orchestrates SvelteKit app, Postgres, NGINX)
 - [x] Add docker-compose.yml for local dev (already present in apps/web)
 - [x] Set up environment variables and secrets for production using `.env.production` (SvelteKit) and `infra/db.env` (Postgres)
-- [ ] Prepare GitHub Actions workflow for CI/CD and deployment to Linode VPS
-- [ ] Document deployment process in README
+- [x] Prepare GitHub Actions workflow for CI/CD and deployment to Linode VPS
+- [x] Document deployment process in README
+
+
+## Local Development
+
+1. **Install dependencies**
+   - From the project root, run:
+     ```sh
+     cd apps/web
+     npm install
+     ```
+
+2. **Start the local Postgres database (Docker Compose)**
+   - From `apps/web`, run:
+     ```sh
+     npm run db:start
+     ```
+   - This will start a Postgres container for development.
+
+3. **Push the Drizzle schema to the database**
+   - From `apps/web`, run:
+     ```sh
+     npm run db:push
+     ```
+
+4. **Start the SvelteKit development server**
+   - From `apps/web`, run:
+     ```sh
+     npm run dev
+     ```
+   - The app will be available at http://localhost:5173 by default.
+
+5. **(Optional) Run Storybook**
+   - From `apps/web`, run:
+     ```sh
+     npm run storybook
+     ```
+   - Storybook will be available at http://localhost:6006
+
+6. **Stop the local database**
+   - From `apps/web`, run:
+     ```sh
+     docker compose down
+     ```
 
 ## Deployment Process
 
