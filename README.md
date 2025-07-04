@@ -17,7 +17,7 @@ A monorepo for the next-generation personal publishing system, inspired by zette
 
 ### Key Decisions
 - Monorepo structure
-- Custom JWT authentication (with Drizzle/Postgres)
+- Lucia authentication (with Drizzle/Postgres)
 - Media storage: deferred
 - Vanilla CSS for styling
 
@@ -25,9 +25,9 @@ A monorepo for the next-generation personal publishing system, inspired by zette
 
 ### 1. Project Structure & SvelteKit Scaffold
 - [x] Create monorepo directories: `apps/`, `packages/`, `infra/`
-- [ ] Scaffold SvelteKit app in `apps/web`
-- [ ] Add initial Storybook setup
-- [ ] Document all steps in this README
+- [x] Scaffold SvelteKit app in `apps/web` (with TypeScript, Prettier, ESLint, Node adapter, Drizzle/Postgres, Lucia, Storybook)
+- [x] Add initial Storybook setup
+- [x] Document all steps in this README
 
 ### 2. Web Server & Deployment
 - [ ] Add Dockerfiles for SvelteKit, Postgres, NGINX
