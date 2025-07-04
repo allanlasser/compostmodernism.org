@@ -7,7 +7,7 @@ services:
     container_name: compost-web
     restart: always
     env_file:
-      - ../apps/web/.env.production
+      - ./apps/web/.env.production
     depends_on:
       - db
     expose:
