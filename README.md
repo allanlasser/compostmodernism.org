@@ -67,7 +67,7 @@ A monorepo for the next-generation personal publishing system, inspired by zette
      docker compose up --build -d
      ```
 
-6. **Set up SSL (HTTPS)**
+### SSL (HTTPS) with Let's Encrypt
    - Use Let's Encrypt/certbot to generate SSL certificates:
      ```sh
      sudo systemctl stop nginx  # or stop any service using port 80
@@ -87,8 +87,24 @@ A monorepo for the next-generation personal publishing system, inspired by zette
      ```
    - (Optional) Set up a cron job for automatic renewal (Certbot usually does this by default).
 
-7. **(Optional) Set up CI/CD**
-   - Use GitHub Actions or another CI system to automate deployment steps.
+### Continuous Deployment with GitHub Actions
+   - This project uses GitHub Actions to automate deployment to the Linode VPS on every push to `main`.
+   - The workflow is defined in `.github/workflows/deploy.yml` and:
+     - Connects to the server via SSH using a private key stored in GitHub Secrets (`VPS_SSH_KEY`).
+     - Runs the following commands on the server:
+       - `docker-compose down`
+       - `git pull`
+       - `docker-compose up --build -d`
+   - To set up:
+     1. Generate an SSH key pair on your local machine:
+        ```sh
+        ssh-keygen -t ed25519 -C "github-actions-deploy"
+        ```
+     2. Add the public key to your server's `~/.ssh/authorized_keys`.
+     3. Add the private key as the `VPS_SSH_KEY` secret in your GitHub repo.
+     4. Add your server's IP and username as `VPS_SSH_HOST` and `VPS_SSH_USER` secrets.
+     5. On every push to `main`, the workflow will deploy the latest code automatically.
+
 ## Environment Variables & Secrets
 
 - SvelteKit app secrets are stored in `apps/web/.env.production`. Example:
