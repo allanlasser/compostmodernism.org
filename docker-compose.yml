@@ -2,7 +2,7 @@ version: '3.9'
 services:
   web:
     build:
-      context: ../apps/web
+      context: ./apps/web
       dockerfile: Dockerfile
     container_name: compost-web
     restart: always
