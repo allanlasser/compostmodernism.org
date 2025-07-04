@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: compost-web
+    restart: always
+    env_file:
+      - ../apps/web/.env.production
+    depends_on:
+      - db
+    expose:
+      - 3000
+
+  db:
+    image: postgres:16-alpine
+    container_name: compost-db
+    restart: always
+    env_file:
+      - ./infra/db.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: compost-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
