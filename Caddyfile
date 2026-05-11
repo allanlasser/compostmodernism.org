@@ -1,0 +1,12 @@
+compostmodernism.org {
+    reverse_proxy compost-web:3000
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+www.compostmodernism.org {
+    redir https://compostmodernism.org{uri} permanent
+}
