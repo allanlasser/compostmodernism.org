@@ -31,3 +31,6 @@ posts.db
 posts.db-journal
 coverage/
 
+# Claude Code local state
+.claude/
+
