@@ -194,7 +194,7 @@ test: does not delete related tags
 ### Checkpoint 3
 
 - [ ] `npm test` — all db tests pass
-- [ ] `node scripts/init-db.js` — creates `posts.db` without error
+- [ ] `npx tsx scripts/init-db.ts` — creates `posts.db` without error
 - [ ] Manual smoke test: insert a post via Node REPL, read it back
 
 ---
@@ -401,7 +401,7 @@ test: key follows backups/posts-YYYY-MM-DD.db pattern
 ### Checkpoint 7
 
 - [ ] `npm test` — all export/backup tests pass
-- [ ] `node scripts/export-and-backup.js` (with real `.env`) — creates files in `archive/`
+- [ ] `npx tsx scripts/export-and-backup.ts` (with real `.env`) — creates files in `archive/`
 
 ---
 
