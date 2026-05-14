@@ -1,5 +1,6 @@
 <script lang="ts">
-	export let data: {
+	interface Props {
+		data: {
 		post: {
 			slug: string;
 			body: string;
@@ -10,7 +11,10 @@
 			permalink: string;
 		};
 	};
-	$: post = data.post;
+	}
+
+	let { data }: Props = $props();
+	let post = $derived(data.post);
 </script>
 
 <article class="post post--single">

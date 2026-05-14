@@ -8,7 +8,11 @@
 		tags: { name: string; slug: string }[];
 		permalink: string;
 	}
-	export let item: FeedItemData;
+	interface Props {
+		item: FeedItemData;
+	}
+
+	let { item }: Props = $props();
 </script>
 
 {#if item.url}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FeedItem from '$lib/components/FeedItem.svelte';
-	export let data: {
+	interface Props {
+		data: {
 		tag: string;
 		feed: {
 			slug: string;
@@ -12,6 +13,9 @@
 			permalink: string;
 		}[];
 	};
+	}
+
+	let { data }: Props = $props();
 </script>
 
 <main>
