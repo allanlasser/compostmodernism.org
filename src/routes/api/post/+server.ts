@@ -4,11 +4,29 @@ import { permalink } from '$lib/slug';
 import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 
+function isString(t: unknown): t is string {
+  return typeof t === 'string' && t.trim().length > 0
+}
+
+const emptyToNull = z
+	.string()
+	.trim()
+	.nullish()
+	.transform((v) => v || null);
+
 const postInputSchema = z.object({
 	body: z.string().trim().min(1, 'body is required'),
-	title: z.string().trim().nullable().optional(),
-	url: z.string().trim().nullable().optional(),
-	tags: z.array(z.string().trim()).optional().default([])
+	title: emptyToNull,
+	url: emptyToNull,
+	tags: z
+		.array(z.unknown())
+		.optional()
+		.default([])
+		.transform((arr) =>
+			arr
+				.filter(isString)
+				.map((s) => s.trim())
+		)
 });
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -28,7 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'title is required when url is provided' }, { status: 400 });
 	}
 
-	const result = insertPost({ body, title: title ?? null, url: url ?? null, tags });
+	const result = insertPost({ body, title, url, tags });
 
 	return json(
 		{ ok: true, permalink: permalink({ slug: result.slug, created_at: Date.now() }) },
