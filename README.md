@@ -178,6 +178,69 @@ A monorepo for the next-generation personal publishing system, inspired by zette
 - [ ] Public feed page for clips
 - [ ] Protected route for adding new clips (JWT auth)
 
+## API Routes
+
+All write endpoints require a `Authorization: Bearer <POST_SECRET>` header unless noted. All responses are JSON.
+
+### `POST /api/session`
+
+Authenticates the admin. Sets an `httpOnly` session cookie on success.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 400 | `{ error }` | Body missing or malformed |
+| 401 | `{ error: "Unauthorized" }` | Wrong password |
+| 200 | `{ ok: true }` | Authenticated |
+
+**Request body:** `{ password: string }`
+
+---
+
+### `POST /api/post`
+
+Creates a new post.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
+| 400 | `{ error }` | Invalid body, or `url` provided without `title` |
+| 201 | `{ ok: true, permalink: string }` | Post created |
+
+**Request body:** `{ body: string, title?: string, url?: string, tags?: string[] }`
+
+---
+
+### `PATCH /api/post/[slug]`
+
+Updates an existing post. All fields are optional; omitted fields keep their existing values.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
+| 400 | `{ error }` | Invalid body, or `url` provided without `title` |
+| 404 | `{ error: "Not found" }` | No post with that slug |
+| 200 | `{ ok: true }` | Post updated |
+
+**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[] }`
+
+---
+
+### `POST /api/upload`
+
+Processes and uploads an image to R2. Resizes to ≤ 1600×1600 and converts to WebP.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
+| 400 | `{ error }` | `image` field missing or not a file |
+| 500 | `{ error: "Image processing failed" }` | sharp pipeline threw |
+| 500 | `{ error: "Upload failed" }` | R2 upload threw |
+| 201 | `{ ok: true, url: string }` | Uploaded; `url` is the public R2 URL |
+
+**Request body:** `multipart/form-data` with an `image` file field.
+
+---
+
 ## References
 - [allanlasser.com](https://github.com/allanlasser/allanlasser.com)
 - [co-op.computer](https://github.com/allanlasser/co-op.computer)

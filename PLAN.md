@@ -10,6 +10,7 @@ Red-green TDD with vitest throughout. Each phase ends with a checkpoint: all tes
 - **Green** — write the minimum code to pass it
 - **Refactor** — clean up without breaking tests
 - **Language:** TypeScript by default. Source files are `.ts`, components use `<script lang="ts">`, tests are `.test.ts`. `svelte.config.js` conventionally stays `.js` (toolchain loads it pre-TS); `vite.config.ts` includes `/// <reference types="vitest" />` so the `test` key is typed.
+- **Validation:** All API route handlers validate incoming data with [Zod](https://zod.dev) using `safeParse`. JSON bodies are parsed directly; `FormData` bodies are converted with `Object.fromEntries` before parsing. Invalid input returns a `400` before any business logic runs.
 - Test files live next to the code they test: `src/lib/slug.test.ts`, etc.
 - Database tests use an in-memory SQLite instance (`new Database(':memory:')`)
 - R2 and sharp are mocked at the module level
