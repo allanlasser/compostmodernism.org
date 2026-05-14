@@ -438,8 +438,79 @@ No automated tests for infra config — verified by inspection and smoke test.
 | 6 | `src/routes/admin/**` | Admin tests green |
 | 7 | `scripts/export-and-backup.ts` | Export tests green |
 | 8 | Docker, Caddy, CI | Manual deploy smoke test |
+| 9 | `images` + `post_images` tables, `recordImage`, `setPostImages` | Ledger tests green |
 
 Each phase depends on the previous one being at checkpoint. Do not begin Phase N+1 until Phase N's checkbox list is fully checked off.
+
+---
+
+## Phase 9 — Image Ledger
+
+**Goal:** Every `/api/upload` records a row in `images`; every post create/update
+links the post to images whose R2 keys appear in the body.
+
+Additive over the live schema — uses `CREATE TABLE IF NOT EXISTS` so the
+already-deployed `posts.db` migrates cleanly when `init-db.ts` is re-run.
+
+Files touched:
+- `scripts/init-db.ts` — append `images` and `post_images` table definitions
+- `src/lib/db.ts` — add `recordImage`, `setPostImages`, `ImageRow`; call
+  `setPostImages` from `insertPost` and `updatePost`
+- `src/routes/api/upload/+server.ts` — call `recordImage(key)` after `uploadToR2`
+
+Tests touched:
+- `src/lib/db.test.ts` — new describe blocks for the ledger functions
+- `src/routes/api/upload/upload.test.ts` — assert `recordImage` is called
+
+### Red → Green cycles
+
+#### Schema migration
+```
+test: re-running init on an existing db is idempotent (no errors, no data loss)
+test: post deletion cascades to post_images, leaves images intact
+```
+
+#### `recordImage`
+```
+test: first call inserts a row with the given key and uploaded_at = Date.now()
+test: second call with same key returns the existing row (idempotent on key)
+test: title/alt/caption/credit default to null
+```
+
+#### `setPostImages`
+```
+test: body containing one R2 URL → one post_images row
+test: body containing two distinct R2 URLs → two rows
+test: body containing the same URL twice → one row (dedup)
+test: body containing a URL not in images table → silently skipped
+test: body containing no R2 URLs → no rows
+test: re-running replaces existing rows (delete-then-insert)
+test: respects R2_PUBLIC_URL — URLs from other hosts are ignored
+test: matches the URL inside markdown image syntax `![alt](url)`
+```
+
+#### Integration with `insertPost` / `updatePost`
+```
+test: insertPost with body referencing a recorded image creates the join row
+test: updatePost replacing the body removes stale image links and adds new ones
+test: updatePost that doesn't change the body leaves join rows intact
+  (or: deterministically rebuilds them — pick whichever the implementation does
+  and lock it in)
+```
+
+#### Upload endpoint
+```
+test: successful upload calls recordImage with the generated key
+test: recordImage is called with the same key used in the returned URL
+```
+
+### Checkpoint 9
+
+- [ ] `npm test` — all ledger tests pass
+- [ ] `npx tsx scripts/init-db.ts` against an existing `posts.db` — no errors, new
+      tables present (`sqlite3 posts.db '.schema images'`)
+- [ ] Manual smoke test: upload an image via `/api/upload`, then POST a post whose
+      body includes the returned URL — `SELECT * FROM post_images` shows the link
 
 ---
 

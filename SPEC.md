@@ -1388,6 +1388,121 @@ crontab -e
 
 ---
 
+## 15. Image Ledger
+
+A minimal record of every image uploaded to R2, plus a join table linking posts to
+the images they reference. The ledger lets you keep a notebook of uploaded assets
+(with editable title/alt/caption/credit) and answers "which posts use this image?"
+without scanning every post body.
+
+The ledger is descriptive, not authoritative: R2 is the source of truth for whether
+an object exists. The DB just remembers the things you've put there and lets you
+annotate them.
+
+### Schema additions (append to `scripts/init-db.ts`)
+
+```sql
+CREATE TABLE IF NOT EXISTS images (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  key         TEXT    NOT NULL UNIQUE,   -- R2 object key, e.g. images/2026/05/13/abc12345.webp
+  uploaded_at INTEGER NOT NULL,
+  title       TEXT,
+  alt         TEXT,
+  caption     TEXT,
+  credit      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS post_images (
+  post_id  INTEGER NOT NULL REFERENCES posts(id)  ON DELETE CASCADE,
+  image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+  PRIMARY KEY (post_id, image_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_images_key ON images (key);
+```
+
+**Notes:**
+- The public URL is intentionally **not** stored. It is derived as
+  `${R2_PUBLIC_URL}/${key}` at read time so a future URL change is a config edit,
+  not a migration.
+- File metadata (mime, bytes, width, height) is **not** stored. The upload pipeline
+  guarantees `image/webp`, max 1600px long edge — these facts are derivable.
+- `ON DELETE CASCADE` on `post_images` cleans join rows when a post is deleted.
+  Image rows themselves persist; orphans in R2 are cheap and recoverable.
+
+### New functions in `src/lib/db.ts`
+
+```typescript
+import { env } from '$env/dynamic/private';
+
+export interface ImageRow {
+  id: number;
+  key: string;
+  uploaded_at: number;
+  title: string | null;
+  alt: string | null;
+  caption: string | null;
+  credit: string | null;
+}
+
+/**
+ * Records an uploaded image in the ledger. Idempotent on key.
+ */
+export function recordImage(key: string): ImageRow {
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO images (key, uploaded_at) VALUES (?, ?)
+    ON CONFLICT (key) DO NOTHING
+  `).run(key, now);
+  return db.prepare('SELECT * FROM images WHERE key = ?').get(key) as ImageRow;
+}
+
+/**
+ * Scans a post body for R2 image URLs, looks up their ledger rows, and replaces
+ * the post_images join rows for the post. Unknown URLs are silently skipped.
+ */
+export function setPostImages(postId: number, body: string): void {
+  db.prepare('DELETE FROM post_images WHERE post_id = ?').run(postId);
+
+  const prefix = env.R2_PUBLIC_URL.replace(/\/$/, '') + '/';
+  const keys = new Set<string>();
+  // Match the prefix followed by an images/... path up to the .webp extension.
+  const pattern = new RegExp(
+    prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(images/[^\\s)"\'<>]+\\.webp)',
+    'g'
+  );
+  for (const match of body.matchAll(pattern)) keys.add(match[1]);
+
+  if (!keys.size) return;
+  const select = db.prepare('SELECT id FROM images WHERE key = ?');
+  const insert = db.prepare('INSERT OR IGNORE INTO post_images (post_id, image_id) VALUES (?, ?)');
+  for (const key of keys) {
+    const row = select.get(key) as { id: number } | undefined;
+    if (row) insert.run(postId, row.id);
+  }
+}
+```
+
+`insertPost` and `updatePost` each call `setPostImages(postId, body)` after writing
+the post row — the same shape as the existing `setPostTags` call.
+
+### Endpoint change
+
+In `src/routes/api/upload/+server.ts`, after a successful `uploadToR2` call, also
+call `recordImage(key)`. The response shape is unchanged; the ledger insert is a
+side-effect.
+
+### What this does **not** do
+
+- No admin UI for editing image metadata. The columns exist; populating them is a
+  future add-on (or hand-edit via `sqlite3 posts.db`).
+- No image picker / reuse UI. The ledger makes reuse *possible* later; the initial
+  build only records what's been uploaded and which posts cite it.
+- No stub rows for manually pasted URLs that don't match a ledger entry. Only
+  uploads through `/api/upload` create rows.
+
+---
+
 ## Content Workflows Summary
 
 ### Plain note (phone)
