@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FeedItem from '$lib/components/FeedItem.svelte';
 	export let data: {
+		tag: string;
 		feed: {
 			slug: string;
 			body: string;
@@ -14,6 +15,8 @@
 </script>
 
 <main>
+	<h1>#{data.tag}</h1>
+
 	{#each data.feed as item (item.slug)}
 		<FeedItem {item} />
 	{/each}
