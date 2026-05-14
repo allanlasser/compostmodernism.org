@@ -5,6 +5,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [sveltekit()],
 	test: {
-		environment: 'node'
+		environment: 'node',
+		environmentMatchGlobs: [['src/**/*.svelte.test.ts', 'happy-dom']],
+		setupFiles: ['./vitest.setup.ts']
 	}
 });
