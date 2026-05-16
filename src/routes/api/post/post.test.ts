@@ -61,6 +61,17 @@ describe('POST /api/post', () => {
 		expect(json.permalink).toMatch(/^\/\d{4}\/\d{2}\/\d{2}\/8charhex$/);
 	});
 
+	it('201 with session cookie (no Bearer header)', async () => {
+		mockInsert.mockReturnValue({ id: 1, slug: '8charhex' });
+		const cookies = { get: vi.fn().mockReturnValue('test-secret') };
+		const res = await POST({
+			request: req({ body: 'from admin UI' }),
+			cookies
+		} as never);
+		expect(res.status).toBe(201);
+		expect(mockInsert).toHaveBeenCalled();
+	});
+
 	it('201 link post → calls insertPost with url+title+tags', async () => {
 		mockInsert.mockReturnValue({ id: 1, slug: 'hello-world' });
 		const res = await POST({

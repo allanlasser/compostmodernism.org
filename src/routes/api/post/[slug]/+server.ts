@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { getPostBySlug, updatePost } from '$lib/db';
-import { env } from '$env/dynamic/private';
+import { isAuthorized } from '$lib/auth';
 import { z } from 'zod';
 
 const postUpdateSchema = z.object({
@@ -10,11 +10,11 @@ const postUpdateSchema = z.object({
 	tags: z.array(z.string().trim()).optional()
 });
 
-export const PATCH: RequestHandler = async ({ request, params }) => {
-	const auth = request.headers.get('Authorization');
-	
-  // We need to be authenticated
-  if (!env.POST_SECRET || auth !== `Bearer ${env.POST_SECRET}`) {
+export const PATCH: RequestHandler = async (event) => {
+	const { request, params } = event;
+
+  // We need to be authenticated (Bearer token or session cookie)
+  if (!isAuthorized(event)) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 

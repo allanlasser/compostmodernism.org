@@ -2,20 +2,19 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { uploadToR2 } from '$lib/r2';
-import { env } from '$env/dynamic/private';
+import { isAuthorized } from '$lib/auth';
 import { z } from 'zod';
 
 const uploadInputSchema = z.object({
 	image: z.instanceof(File)
 });
 
-export const POST: RequestHandler = async ({ request }) => {
-	const auth = request.headers.get('Authorization');
-	if (!env.POST_SECRET || auth !== `Bearer ${env.POST_SECRET}`) {
+export const POST: RequestHandler = async (event) => {
+	if (!isAuthorized(event)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const parsed = uploadInputSchema.safeParse(Object.fromEntries(await request.formData()));
+	const parsed = uploadInputSchema.safeParse(Object.fromEntries(await event.request.formData()));
 	if (!parsed.success) {
 		return json({ error: 'image file is required' }, { status: 400 });
 	}

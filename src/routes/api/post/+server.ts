@@ -1,7 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { insertPost } from '$lib/db';
 import { permalink } from '$lib/slug';
-import { env } from '$env/dynamic/private';
+import { isAuthorized } from '$lib/auth';
 import { z } from 'zod';
 
 function isString(t: unknown): t is string {
@@ -29,13 +29,12 @@ const postInputSchema = z.object({
 		)
 });
 
-export const POST: RequestHandler = async ({ request }) => {
-	const auth = request.headers.get('Authorization');
-	if (!env.POST_SECRET || auth !== `Bearer ${env.POST_SECRET}`) {
+export const POST: RequestHandler = async (event) => {
+	if (!isAuthorized(event)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const parsed = postInputSchema.safeParse(await request.json());
+	const parsed = postInputSchema.safeParse(await event.request.json());
 	if (!parsed.success) {
 		return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
 	}

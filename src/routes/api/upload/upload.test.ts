@@ -69,6 +69,14 @@ describe('POST /api/upload', () => {
 		expect(json).toMatchObject({ error: expect.any(String) });
 	});
 
+	it('201 with session cookie (no Bearer header)', async () => {
+		const file = new File([new Uint8Array([1, 2, 3, 4])], 'photo.jpg', { type: 'image/jpeg' });
+		const cookies = { get: vi.fn().mockReturnValue('test-secret') };
+		const res = await POST({ request: makeRequest(file), cookies } as never);
+		expect(res.status).toBe(201);
+		expect(mockUpload).toHaveBeenCalled();
+	});
+
 	it('201 valid upload → runs sharp pipeline and uploads to R2', async () => {
 		const file = new File([new Uint8Array([1, 2, 3, 4])], 'photo.jpg', { type: 'image/jpeg' });
 		const res = await POST({

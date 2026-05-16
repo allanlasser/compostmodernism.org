@@ -24,6 +24,10 @@ function req(body: unknown, auth?: string): Request {
 	});
 }
 
+function cookies(session?: string) {
+	return { get: vi.fn().mockReturnValue(session) };
+}
+
 const existing = {
 	id: 1,
 	slug: 'hello',
@@ -86,6 +90,17 @@ describe('PATCH /api/post/[slug]', () => {
 		} as never);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ ok: true });
+	});
+
+	it('200 valid update with session cookie (no Bearer header)', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await PATCH({
+			request: req({ body: 'new body' }),
+			cookies: cookies('test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockUpdate).toHaveBeenCalled();
 	});
 
 	it('omitted title keeps existing value', async () => {
