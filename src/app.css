@@ -1,0 +1,65 @@
+:root {
+	--color-bg: #faffe1;
+	--color-ink: #4f2413;
+	--color-ink-soft: rgb(79 36 19 / 0.8);
+
+	--font-serif: 'Gentium Book Plus', 'Gentium Book Basic', Georgia, serif;
+	--font-display: 'Gentium Plus', 'Gentium Basic', Georgia, serif;
+
+	--size-body: 16px;
+	--size-lede: 18px;
+	--size-meta: 14px;
+	--size-title: 24px;
+
+	--leading-body: 24px;
+	--leading-lede: 31px;
+
+	--space-rail: 160px;
+	--space-gap: 48px;
+	--space-stack: 13px;
+	--space-section: 32px;
+	--space-header: 64px;
+
+	--content-max: 840px;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--color-bg);
+	color: var(--color-ink);
+	font-family: var(--font-serif);
+	font-size: var(--size-body);
+	line-height: var(--leading-body);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+a {
+	color: inherit;
+	text-decoration-skip-ink: none;
+}
+
+p {
+	margin: 0;
+}
+
+h1,
+h2,
+h3 {
+	margin: 0;
+	font-weight: normal;
+}
+
+ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}

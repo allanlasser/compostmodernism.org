@@ -28,7 +28,7 @@ function item(over: Partial<FeedItem> = {}): FeedItem {
 afterEach(cleanup);
 
 describe('feed page', () => {
-	it('link post — external <a> on title with → marker', () => {
+	it('link post — external <a> on title with ➻ marker', () => {
 		const { container } = render(Page, {
 			props: {
 				data: {
@@ -40,7 +40,7 @@ describe('feed page', () => {
 		expect(link.getAttribute('href')).toBe('https://daringfireball.net');
 		expect(link.getAttribute('target')).toBe('_blank');
 		expect(link.getAttribute('rel')).toContain('noopener');
-		expect(container.querySelector('.post--link .link-marker')?.textContent).toBe('→');
+		expect(container.querySelector('.post--link h2 a .link-marker')?.textContent).toBe('➻');
 	});
 
 	it('titled post — h2 with no external link', () => {
