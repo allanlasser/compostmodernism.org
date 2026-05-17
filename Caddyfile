@@ -1,0 +1,8 @@
+compostmodernism.org {
+	reverse_proxy compostmodernism:3000
+
+	# Larger than Caddy's default — image uploads can be multi-MB
+	request_body {
+		max_size 20MB
+	}
+}

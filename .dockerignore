@@ -1,0 +1,33 @@
+node_modules
+.svelte-kit
+build
+coverage
+
+# Local state
+posts.db
+posts.db-shm
+posts.db-wal
+posts.db-journal
+
+# Secrets — must never enter the image
+.env
+.env.*
+!.env.example
+
+# VCS + editor
+.git
+.gitignore
+.gitattributes
+.DS_Store
+
+# Claude Code
+.claude
+
+# Docs / scratch
+*.log
+NOTES.md
+PLAN.md
+SPEC.md
+README.md
+devlog
+archive

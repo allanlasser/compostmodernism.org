@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    container_name: compostmodernism
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./posts.db:/app/posts.db
+    networks:
+      - web
+
+# `web` is the gateway's shared network — Caddy reaches this container by
+# its `container_name`. No host ports published.
+networks:
+  web:
+    external: true
