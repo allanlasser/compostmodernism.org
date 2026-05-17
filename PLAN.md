@@ -14,6 +14,10 @@ Red-green TDD with vitest throughout. Each phase ends with a checkpoint: all tes
 - Test files live next to the code they test: `src/lib/slug.test.ts`, etc.
 - Database tests use an in-memory SQLite instance (`new Database(':memory:')`)
 - R2 and sharp are mocked at the module level
+- **Schema:** Versioned SQL files in `migrations/`. `createDb()` runs the
+  migration runner (`src/lib/migrate.ts`) on every connection, applying any
+  files newer than `PRAGMA user_version`. See the **Schema Migrations**
+  section below.
 
 ---
 
@@ -412,14 +416,26 @@ No automated tests for infra config — verified by inspection and smoke test.
 
 ### Steps
 
-1. Write `Dockerfile` per SPEC §9 (build in CI, not in Docker).
+1. Write `Dockerfile` per SPEC §9 (build in CI, not in Docker). **Must include
+   `COPY migrations/ ./migrations/`** so the runner can find the SQL files at
+   container start — without this, the first request after deploy throws
+   "migrations directory not found".
 2. Write `docker-compose.yml` per SPEC §9 (bind to `127.0.0.1:3000`).
 3. Write `.github/workflows/deploy.yml` per SPEC §11.
 4. Write Caddy site config per SPEC §10.
+5. Resolve the deferred Phase 3 follow-up: decide whether `scripts/init-db.ts`
+   runs in production via `tsx` (add to runtime deps) or pre-compiled. The
+   SvelteKit server boots its own `createDb()` so migrations auto-apply on
+   restart; the standalone CLI is only needed for first-time bootstrap or
+   manual operations.
 
 ### Checkpoint 8
 
 - [ ] `docker compose build` succeeds locally
+- [ ] `docker compose up` on a fresh volume — server boots, `migrate()` applies
+      `001_init.sql`, `PRAGMA user_version` becomes 1
+- [ ] `docker compose up -d --build` after adding a new migration — the new
+      file applies on the next boot, version bumps, no manual step required
 - [ ] `docker compose up` — server responds on `localhost:3000`
 - [ ] Push to `main` — GitHub Actions deploys successfully to VPS
 - [ ] `https://compostmodernism.org` loads over TLS
@@ -514,6 +530,59 @@ test: recordImage is called with the same key used in the returned URL
 
 ---
 
+## Schema Migrations
+
+Cross-cutting subsystem added after Phase 9. The DB schema is no longer a
+constant inside `db.ts`; it lives in versioned SQL files that the runner
+applies on demand.
+
+### Files
+
+- `migrations/NNN_short_description.sql` — one file per schema change.
+  `001_init.sql` is the baseline (the previous `SCHEMA` constant, extracted
+  verbatim).
+- `src/lib/migrate.ts` — the runner (~30 lines). Reads `PRAGMA user_version`,
+  filters files matching `^\d{3}_.+\.sql$`, sorts by the numeric prefix, and
+  applies each file inside its own `db.transaction(() => { exec sql; bump
+  version })`.
+- `src/lib/migrate.test.ts` — covers the runner contract: fresh DB, partial
+  DB, no-op at latest, numeric (not lexical) ordering, non-matching files
+  ignored, transactional rollback, missing-dir error.
+
+### Convention
+
+- **Never edit a committed migration.** Always add a new one — `002_*.sql`
+  for the next change, etc. Past migrations are immutable history.
+- File names use a three-digit prefix so lexical sort matches numeric sort up
+  to 999 migrations.
+- A migration that fails part-way through rolls back atomically; the version
+  is not advanced unless every statement succeeds. On the next run, the
+  runner retries the same file.
+- Each migration applies in its own transaction. If file 003 fails after 002
+  succeeded, 002 stays applied (`user_version = 2`). You fix 003, deploy,
+  and only 003 retries.
+
+### Workflow
+
+1. Add `migrations/NNN_short_description.sql`.
+2. If the change isn't purely additive (column added/dropped, type changed),
+   update the affected `db.ts` query functions and their tests in the same
+   commit so `db.test.ts` still passes against the new schema.
+3. Apply locally: `npx tsx scripts/init-db.ts`, or just restart the dev
+   server — `createDb()` runs `migrate()` on every connection.
+4. In production: a container restart applies pending migrations
+   automatically. See Phase 8 checkpoint.
+
+### What this replaces
+
+Previously: a single `SCHEMA` const in `db.ts`, applied via `raw.exec(SCHEMA)`
+on every `createDb()`. Idempotent for `CREATE TABLE IF NOT EXISTS` but unable
+to handle `ALTER TABLE`, data migrations, or any non-additive change without
+hand-running SQL on the VPS. Phase 9's ledger went through that mechanism;
+every change after Phase 9 goes through `migrations/`.
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
@@ -525,3 +594,5 @@ Items punted from earlier phases. Address before final deploy unless noted.
   documented and deferred.
 - **Script runtime (from Phase 3):** Decide between `tsx` at runtime vs a
   pre-compile step for `scripts/*.ts` in the Docker image. Resolve in Phase 8.
+  (Less urgent than before — the server's own boot path runs migrations via
+  `createDb()`, so `scripts/init-db.ts` is only needed for one-off CLI use.)
