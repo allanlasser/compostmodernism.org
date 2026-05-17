@@ -80,15 +80,18 @@ compostmodernism/
 │           └── session/
 │               └── +server.js     # POST — create session (login)
 ├── scripts/
-│   ├── init-db.js                 # One-time DB setup script
-│   └── export-and-backup.js       # Nightly markdown export + R2 DB backup
+│   ├── init-db.ts                 # One-time DB setup script
+│   └── export-and-backup.ts       # Nightly markdown export + R2 DB backup
+├── migrations/
+│   └── 001_init.sql               # Versioned SQL files; runner applies on boot
 ├── archive/
 │   └── YYYY/MM/DD/                # Per-post markdown files, auto-generated
 ├── svelte.config.js
-├── vite.config.js
+├── vite.config.ts
 ├── package.json
 ├── Dockerfile
 ├── docker-compose.yml
+├── Caddyfile                      # mounted into the gateway
 └── .env.example           # committed; actual .env lives only on the VPS
 ```
 
@@ -1015,34 +1018,59 @@ The admin page has three responsibilities:
 
 ### `Dockerfile`
 
-The image wraps pre-built artifacts — the build happens in CI, not in Docker.
-This keeps image rebuilds on the VPS fast (no `npm run build` on the server).
+Two-stage build. The builder installs the native-deps toolchain
+(`python3 make g++ vips-dev` for `better-sqlite3` and `sharp`), runs
+`npm ci`, builds the SvelteKit bundle, then prunes to production deps.
+The runtime stage copies `node_modules/`, `build/`, `migrations/`,
+`scripts/`, `src/`, plus `package.json` and `tsconfig.json` — no
+toolchain ships.
+
+The build runs on the VPS during `docker compose up -d --build`. CI's
+build job is a gate (it verifies the build + tests pass before SSH'ing
+to the VPS), not a packaging step.
 
 ```dockerfile
-FROM node:20-alpine
-
+FROM node:20-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache python3 make g++ vips-dev
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build && npm prune --omit=dev
 
-COPY package.json .
-COPY build/      ./build/
-COPY scripts/    ./scripts/
+FROM node:20-alpine AS runtime
+WORKDIR /app
+RUN apk add --no-cache vips
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/build ./build
+COPY package.json package-lock.json tsconfig.json ./
+COPY src/ ./src/
+COPY scripts/ ./scripts/
 COPY migrations/ ./migrations/
-
-RUN npm ci --omit=dev
-
+ENV NODE_ENV=production
 EXPOSE 3000
-
 CMD ["node", "build/index.js"]
 ```
 
 `COPY migrations/` is required — the server runs `migrate()` on startup
-and the runner throws if the directory is absent. New migrations applied
-in this order: push code → CI rebuilds image with the new `migrations/`
-contents → `docker compose up -d --build` on the VPS → server boot calls
+and the runner throws if the directory is absent. New migrations apply
+in this order: push code → CI build job passes → SSH into VPS →
+`git pull && docker compose up -d --build` → server boot calls
 `createDb()` → `migrate()` finds files past `user_version` and applies
 them inside transactions before the first request lands.
 
+`src/` ships into the runtime image because the standalone scripts
+(`init-db.ts`, `export-and-backup.ts`) import `../src/lib/db.ts` via
+relative paths and run under `tsx` in production. The SvelteKit server
+itself reads only `build/`; the duplication is ~50 KB and the alternative
+(compiling scripts ahead of time) adds a build step for two files run
+rarely.
+
 ### `docker-compose.yml`
+
+The app joins an external `web` network that the Caddy gateway also
+belongs to — Caddy reaches the app by `container_name` over that
+network, so no host ports are published.
 
 ```yaml
 services:
@@ -1050,16 +1078,20 @@ services:
     build: .
     container_name: compostmodernism
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
+    env_file: .env
     volumes:
       - ./posts.db:/app/posts.db
-    env_file:
-      - .env
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
 ```
 
-Binding to `127.0.0.1:3000` keeps the port off the public interface — only Caddy
-reaches it.
+The `web` network is owned by the gateway (`~/gateway/docker-compose.yml`).
+This compose file just joins it. If `docker compose up` errors with
+"network web not found", start the gateway first.
 
 ### `.env.example`
 
@@ -1087,8 +1119,10 @@ openssl rand -hex 16   # ADMIN_PASSWORD (or use a memorable passphrase)
 ### Useful Docker commands
 
 ```bash
-# First run — server's own createDb() will run migrations on first request,
-# but we initialise explicitly so the DB file exists on the host volume.
+# First run — touch posts.db so the bind-mount creates a file (not a dir),
+# then initialise the schema. The server's own createDb() would also do this
+# on first request, but explicit setup makes the bootstrap legible.
+touch posts.db
 docker compose run --rm app npx tsx scripts/init-db.ts
 docker compose up -d
 
@@ -1097,7 +1131,7 @@ docker compose up -d
 docker compose up -d --build
 
 # Run the nightly export manually
-docker exec compostmodernism node scripts/export-and-backup.js
+docker exec compostmodernism npx tsx scripts/export-and-backup.ts
 
 # View logs
 docker compose logs -f
@@ -1110,14 +1144,16 @@ docker compose logs -f
 
 ## 10. Caddy Configuration
 
-Create a dedicated Caddyfile for this site and import it from your gateway Caddyfile.
-Caddy handles TLS automatically — no certificate management needed.
+The Caddy gateway (`~/gateway`) is a single Caddy container that imports
+per-site Caddyfiles via volume mounts. Each site lives in its own
+directory with a `Caddyfile`; the gateway mounts that file into
+`/etc/caddy/sites/<domain>.caddy`. Caddy hot-reloads when files change.
 
-### `/etc/caddy/sites/compostmodernism.org`
+### `Caddyfile` (in this repo, mounted into the gateway)
 
 ```
 compostmodernism.org {
-    reverse_proxy localhost:3000
+    reverse_proxy compostmodernism:3000
 
     request_body {
         max_size 20MB
@@ -1125,30 +1161,38 @@ compostmodernism.org {
 }
 ```
 
-The `max_size 20MB` directive is required — without it Caddy rejects large image uploads
-before they reach SvelteKit.
+`reverse_proxy compostmodernism:3000` — Caddy and the app share the
+`web` docker network, so Caddy resolves the app by its `container_name`.
+No host port is involved.
 
-### Import line in your gateway Caddyfile
+`max_size 20MB` is required — without it Caddy rejects large image
+uploads before they reach SvelteKit.
 
+### One-time mount in the gateway
+
+Add to `~/gateway/docker-compose.yml`:
+
+```yaml
+services:
+  caddy:
+    volumes:
+      - ~/sites/compostmodernism.org/Caddyfile:/etc/caddy/sites/compostmodernism.org.caddy:ro
 ```
-import /etc/caddy/sites/*
-```
 
-Or if you import by filename:
-
-```
-import /etc/caddy/sites/compostmodernism.org
-```
-
-Reload Caddy after adding the file:
-
-```bash
-docker exec caddy caddy reload --config /etc/caddy/Caddyfile
-```
+Then bounce the gateway: `cd ~/gateway && docker-compose up -d`. Caddy
+picks up the new file automatically.
 
 ---
 
 ## 11. GitHub Actions Deployment
+
+Two jobs: **build** verifies a clean checkout type-checks, tests, and
+builds; **deploy** SSHes to the VPS and triggers `git pull` +
+`docker compose up -d --build`. The VPS holds the canonical source via
+a long-lived git checkout under `~/sites/compostmodernism.org`.
+
+The trigger branch is `blog-engine` during initial bring-up; switch to
+`main` once the deploy mechanics are proven.
 
 ### `.github/workflows/deploy.yml`
 
@@ -1157,39 +1201,39 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [blog-engine]
 
 jobs:
-  deploy:
+  build:
+    name: Build & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
       - run: npm ci
+      - run: npm run check
+      - run: npm test
       - run: npm run build
 
-      - name: Sync build to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/,scripts/,package.json,Dockerfile,docker-compose.yml"
-          target: /var/www/compostmodernism/
-
-      - name: Rebuild and restart container
-        uses: appleboy/ssh-action@v1.0.3
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /var/www/compostmodernism
+            set -euo pipefail
+            cd ~/sites/compostmodernism.org
+            git fetch origin
+            git checkout blog-engine
+            git pull --ff-only
             docker compose up -d --build
 ```
 
@@ -1197,9 +1241,20 @@ jobs:
 
 | Secret | Value |
 |---|---|
-| `VPS_HOST` | Your VPS IP or hostname |
-| `VPS_USER` | SSH user (e.g. `deploy`) |
-| `VPS_SSH_KEY` | Private SSH key |
+| `VPS_HOST` | Your VPS IP or hostname (or SSH config alias resolved to one) |
+| `VPS_USER` | SSH user on the VPS |
+| `VPS_SSH_KEY` | Private SSH key — generate a dedicated, passphraseless ed25519 key scoped to deploys (do **not** reuse a personal key) |
+
+The corresponding public key on the VPS should be added to
+`~/.ssh/authorized_keys` with restrictions:
+
+```
+no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... gha-deploy@compostmodernism
+```
+
+These options block the key from being repurposed for tunneling or
+shell sessions if the GHA secret ever leaks — it can still execute the
+`script:` block, which is all `appleboy/ssh-action` needs.
 
 ---
 
@@ -1270,7 +1325,14 @@ of `posts.db` to R2.
 Re-running the script overwrites existing files in place. If a post was edited since the
 last run, the updated file appears in the git diff — a clean audit trail of changes.
 
-### `scripts/export-and-backup.js`
+### `scripts/export-and-backup.ts`
+
+The actual implementation is TypeScript and lives in this repo at
+`scripts/export-and-backup.ts`. The structure below is the reference
+shape — see the real file for typed Post/Tag wiring, the testable
+helper split (`renderFrontmatter`, `archivePath`, `backupKey`,
+`backupDatabase`), and the `import.meta`-guarded CLI entry. The script
+runs under `tsx` in production.
 
 ```javascript
 import Database from 'better-sqlite3';
@@ -1364,7 +1426,7 @@ console.log(`Uploaded DB backup to R2: ${key}`);
 The cron job runs inside the container so it has access to `.env` variables:
 
 ```
-0 3 * * * docker exec compostmodernism node scripts/export-and-backup.js >> /var/log/compostmodernism-backup.log 2>&1
+0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1
 ```
 
 R2 backups accumulate daily. Set a **lifecycle rule** in the Cloudflare dashboard to
@@ -1374,20 +1436,31 @@ expire objects under the `backups/` prefix after 90 days.
 
 ## 14. VPS First-Time Setup Checklist
 
-Assumes Docker and Caddy are already running on the VPS (consistent with your existing
-projects). Only steps specific to this project are listed.
+Assumes Docker and the Caddy gateway (`~/gateway`) are already running on
+the VPS. Only steps specific to this project are listed.
 
 ```bash
-# Create app directory
-mkdir -p /var/www/compostmodernism
-cd /var/www/compostmodernism
+# Clone repo into the canonical site directory (skip if already present)
+mkdir -p ~/sites
+cd ~/sites
+git clone https://github.com/YOUR_USERNAME/compostmodernism.org.git
+cd compostmodernism.org
 
-# Clone repo
-git clone https://github.com/YOUR_USERNAME/compostmodernism.git .
+# Track the deploy branch
+git checkout blog-engine
 
 # Create .env from template and fill in all values
 cp .env.example .env
 nano .env
+
+# Mount this site's Caddyfile into the gateway (one-time)
+# Add to ~/gateway/docker-compose.yml under services.caddy.volumes:
+#   - ~/sites/compostmodernism.org/Caddyfile:/etc/caddy/sites/compostmodernism.org.caddy:ro
+cd ~/gateway && docker-compose up -d
+cd ~/sites/compostmodernism.org
+
+# Touch posts.db so the bind-mount creates a file (not a directory)
+touch posts.db
 
 # Initialise the database (applies all current migrations)
 docker compose run --rm app npx tsx scripts/init-db.ts
@@ -1396,7 +1469,9 @@ docker compose run --rm app npx tsx scripts/init-db.ts
 docker compose up -d
 ```
 
-Then add the Caddy block from section 10 to your existing `Caddyfile` and reload Caddy.
+After this, pushes to the deploy branch are picked up by GitHub Actions,
+which SSHes in and runs `git pull && docker compose up -d --build` — no
+further manual steps required.
 
 **Cron for nightly export** (on the VPS host, not inside a container):
 
@@ -1405,7 +1480,7 @@ crontab -e
 ```
 
 ```
-0 3 * * * docker exec compostmodernism node scripts/export-and-backup.js >> /var/log/compostmodernism-backup.log 2>&1
+0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1
 ```
 
 ---

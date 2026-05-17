@@ -416,29 +416,36 @@ No automated tests for infra config — verified by inspection and smoke test.
 
 ### Steps
 
-1. Write `Dockerfile` per SPEC §9 (build in CI, not in Docker). **Must include
-   `COPY migrations/ ./migrations/`** so the runner can find the SQL files at
-   container start — without this, the first request after deploy throws
-   "migrations directory not found".
-2. Write `docker-compose.yml` per SPEC §9 (bind to `127.0.0.1:3000`).
-3. Write `.github/workflows/deploy.yml` per SPEC §11.
-4. Write Caddy site config per SPEC §10.
-5. Resolve the deferred Phase 3 follow-up: decide whether `scripts/init-db.ts`
-   runs in production via `tsx` (add to runtime deps) or pre-compiled. The
-   SvelteKit server boots its own `createDb()` so migrations auto-apply on
-   restart; the standalone CLI is only needed for first-time bootstrap or
-   manual operations.
+1. Write `Dockerfile` per SPEC §9 — two-stage build (builder runs
+   `npm ci && npm run build && npm prune --omit=dev`; runtime copies
+   `node_modules/`, `build/`, `migrations/`, `scripts/`, `src/`,
+   `package.json`, `tsconfig.json`). **Must include
+   `COPY migrations/`** so the runner can find the SQL files at
+   container start.
+2. Write `docker-compose.yml` per SPEC §9 — no host ports; joins the
+   external `web` network shared with the Caddy gateway.
+3. Write `Caddyfile` per SPEC §10 — `reverse_proxy compostmodernism:3000`,
+   `request_body max_size 20MB`. Mounted into the gateway as
+   `compostmodernism.org.caddy`.
+4. Write `.github/workflows/deploy.yml` per SPEC §11 — two jobs (build
+   gate + ssh-action that runs `git pull && docker compose up -d --build`).
+   Trigger is `blog-engine` during bring-up; flip to `main` once stable.
+5. Promote `tsx` from devDeps → deps so production scripts
+   (`init-db.ts`, `export-and-backup.ts`) run under `npx tsx` in the
+   container. Resolves the deferred Phase 3 follow-up.
 
 ### Checkpoint 8
 
-- [ ] `docker compose build` succeeds locally
-- [ ] `docker compose up` on a fresh volume — server boots, `migrate()` applies
-      `001_init.sql`, `PRAGMA user_version` becomes 1
-- [ ] `docker compose up -d --build` after adding a new migration — the new
-      file applies on the next boot, version bumps, no manual step required
-- [ ] `docker compose up` — server responds on `localhost:3000`
-- [ ] Push to `main` — GitHub Actions deploys successfully to VPS
+- [ ] `docker build .` succeeds locally on Mac (catches toolchain bugs
+      before they bite the VPS)
+- [ ] On the VPS, after first-time bootstrap: server boots, `migrate()`
+      applies `001_init.sql`, `PRAGMA user_version` becomes 1
+- [ ] Adding a new migration and redeploying — file applies on next
+      boot, version bumps, no manual step required
+- [ ] Push to `blog-engine` — GitHub Actions deploys successfully to VPS
 - [ ] `https://compostmodernism.org` loads over TLS
+- [ ] Cut over: flip workflow trigger from `blog-engine` to `main` once
+      the deploy mechanics are proven; merge `blog-engine` → `main`
 
 ---
 
