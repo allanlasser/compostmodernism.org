@@ -1,186 +1,171 @@
 # compostmodernism.org
 
-## Project Overview
+A small personal blog. SvelteKit + SQLite, deployed in Docker behind a shared
+Caddy gateway. Posts are written from iOS Shortcuts or a password-protected
+`/admin` page; images and nightly DB backups land in Cloudflare R2; the
+canonical post archive is exported nightly to markdown files.
 
-A monorepo for the next-generation personal publishing system, inspired by zettelkasten, Kottke.org, and others. Core feature: "The Heap" — a Tumblr-style blog for quickly posting links, highlights, and notes.
+`PLAN.md` is the phase-by-phase build log. `SPEC.md` is the design document.
+This file is the architectural overview — what the running app actually is.
 
-### Technologies
-- Docker (service management)
-- NGINX (web server)
-- Postgres (database)
-- Drizzle (TypeScript ORM)
-- SvelteKit + TypeScript (frontend)
-- Storybook (component design)
-- Markdown (content, docs)
-- GitHub Actions (CI/CD)
-- Vanilla CSS (styling)
+## Stack
 
-### Key Decisions
-- Monorepo structure
-- Lucia authentication (with Drizzle/Postgres)
-- Media storage: deferred
-- Vanilla CSS for styling
+| Concern | Choice |
+|---|---|
+| Framework | SvelteKit 2 (Svelte 5 runes) |
+| Adapter | `@sveltejs/adapter-node` |
+| Data store | SQLite via `better-sqlite3` (single file: `posts.db`) |
+| Schema management | Versioned SQL files in `migrations/`, applied by `src/lib/migrate.ts` on every connection |
+| Image pipeline | `sharp` — EXIF stripped, max 1600×1600, converted to WebP |
+| Object storage | Cloudflare R2 via `@aws-sdk/client-s3` (images + nightly DB backups) |
+| Markdown | `marked` (rendered server-side at request time) |
+| Validation | `zod` `safeParse` on every API route |
+| Tests | `vitest` + `@testing-library/svelte` + `happy-dom`, 150+ tests across the codebase |
+| Container | Docker + Docker Compose (no host ports — joins external `web` network) |
+| TLS / routing | Caddy, running in a separate gateway container; this repo only ships a `Caddyfile` that the gateway mounts |
+| CI/CD | GitHub Actions: build + test, then SSH `git pull && docker compose up -d --build` |
 
-## Implementation Plan
+## Repository layout
 
-### 1. Project Structure & SvelteKit Scaffold
-- [x] Create monorepo directories: `apps/`, `packages/`, `infra/`
-- [x] Scaffold SvelteKit app in `apps/web` (with TypeScript, Prettier, ESLint, Node adapter, Drizzle/Postgres, Lucia, Storybook)
-- [x] Add initial Storybook setup
-- [x] Document all steps in this README
+```
+.
+├── src/
+│   ├── lib/
+│   │   ├── db.ts            # createDb() + all query functions (typed PostRow/Post/Tag/ImageRow)
+│   │   ├── migrate.ts       # Runs pending migrations/*.sql per PRAGMA user_version
+│   │   ├── slug.ts          # slugify, hashSlug, dateParts, permalink
+│   │   ├── markdown.ts      # marked wrapper used by feed + post pages
+│   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
+│   │   ├── r2.ts            # S3Client + uploadToR2()
+│   │   └── components/      # FeedItem, Dateline, TagList
+│   ├── routes/
+│   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection
+│   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
+│   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
+│   │   ├── tag/[slug]/                    # Tag feed
+│   │   ├── admin/                         # Login form + post list + image uploader
+│   │   └── api/
+│   │       ├── post/+server.ts            # POST  — create
+│   │       ├── post/[slug]/+server.ts     # PATCH — edit
+│   │       ├── upload/+server.ts          # POST  — image to R2 (also records in image ledger)
+│   │       └── session/+server.ts         # POST  — admin login → httpOnly cookie
+│   ├── hooks.server.ts                    # Bridges $env/dynamic/private into process.env for scripts
+│   ├── app.html, app.css, app.d.ts
+├── scripts/
+│   ├── init-db.ts                # One-shot: open posts.db so migrations run
+│   ├── export-and-backup.ts      # Nightly markdown export → archive/, then DB → R2
+│   ├── seed.ts                   # Local-only fixture data
+│   └── fixtures.ts
+├── migrations/
+│   └── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
+├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
+├── docker-compose.yml            # One service, joins external `web` network — no host ports
+├── Caddyfile                     # reverse_proxy compostmodernism:3000 — mounted into the gateway
+├── .github/workflows/deploy.yml  # Build/test gate → SSH deploy on push to blog-engine
+├── DEPLOY.md                     # One-time bootstrap checklist for cornhill
+├── PLAN.md                       # Phase-by-phase TDD plan
+└── SPEC.md                       # Design spec
+```
 
-### 2. Web Server & Deployment
-- [x] Add Dockerfile for SvelteKit app (Node server) in `apps/web/Dockerfile`
-- [x] Add production-ready NGINX config in `infra/nginx/nginx.conf`
-- [x] Add docker-compose.yml for production at project root (orchestrates SvelteKit app, Postgres, NGINX)
-- [x] Add docker-compose.yml for local dev (already present in apps/web)
-- [x] Set up environment variables and secrets for production using `.env.production` (SvelteKit) and `infra/db.env` (Postgres)
-- [x] Prepare GitHub Actions workflow for CI/CD and deployment to Linode VPS
-- [x] Document deployment process in README
+## How it fits together
 
+### Post lifecycle
 
-## Local Development
+1. **Create** — `POST /api/post` with `Authorization: Bearer $POST_SECRET`. Zod validates
+   the body. `insertPost` (in `src/lib/db.ts`) derives a slug (from the title via
+   `slugify`, or an 8-char hash via `hashSlug` for untitled posts), handles slug
+   collisions by appending `-2`, `-3`, …, writes tag join rows, and calls
+   `setPostImages` to record any R2 URLs found inside the markdown body.
+2. **Read** — the feed loader calls `getPosts` (default limit 50, reverse-chronological,
+   hydrated with `tags` and a `date` alias). Each post is rendered by `FeedItem.svelte`,
+   which switches on link/titled/plain.
+3. **Edit** — `/admin` shows a `<details>` block per post. Saving issues
+   `PATCH /api/post/[slug]`; the slug never changes, omitted fields keep their old
+   values, and the body re-runs `setPostImages` to rebuild image join rows.
+4. **Archive** — nightly cron runs `scripts/export-and-backup.ts`: writes
+   `archive/YYYY/MM/DD/slug.md` with YAML frontmatter for every post (idempotent —
+   re-runs overwrite), then `PutObject`s `posts.db` to R2 under
+   `backups/posts-YYYY-MM-DD.db`.
 
-1. **Install dependencies**
-   - From the project root, run:
-     ```sh
-     cd apps/web
-     npm install
-     ```
+### Post types
 
-2. **Start the local Postgres database (Docker Compose)**
-   - From `apps/web`, run:
-     ```sh
-     npm run db:start
-     ```
-   - This will start a Postgres container for development.
+Inspired by Daring Fireball and Kottke. All three are the same row shape; `+page.svelte` switches
+on which fields are present:
 
-3. **Push the Drizzle schema to the database**
-   - From `apps/web`, run:
-     ```sh
-     npm run db:push
-     ```
+- **Link post** — `url` + `title` → title links externally, marker `→` rendered.
+- **Titled post** — `title` only → `<h2>` heading.
+- **Plain post** — body only, no heading.
 
-4. **Start the SvelteKit development server**
-   - From `apps/web`, run:
-     ```sh
-     npm run dev
-     ```
-   - The app will be available at http://localhost:5173 by default.
+### Schema and migrations
 
-5. **(Optional) Run Storybook**
-   - From `apps/web`, run:
-     ```sh
-     npm run storybook
-     ```
-   - Storybook will be available at http://localhost:6006
+The schema lives in `migrations/NNN_*.sql`. `createDb()` calls `migrate()` on every
+connection: it reads `PRAGMA user_version`, sorts files by their numeric prefix, and
+applies each newer file inside its own transaction (rolling back atomically on failure,
+bumping `user_version` only when every statement in the file succeeds). Dev and prod
+use the same path — restart the dev server and pending migrations apply.
 
-6. **Stop the local database**
-   - From `apps/web`, run:
-     ```sh
-     docker compose down
-     ```
+**Never edit a committed migration.** Always add a new one. See PLAN.md §Schema
+Migrations for the convention.
 
-## Deployment Process
+The image ledger (`images` + `post_images`) is part of the baseline `001_init.sql`.
+Every successful `/api/upload` calls `recordImage(key)`; every post create/update
+calls `setPostImages(postId, body)` which scans the body for R2 URLs (respecting
+`R2_PUBLIC_URL`) and rebuilds the join rows. The ledger lets future tooling answer
+"which posts reference this image?" and "which images are orphaned?".
 
-1. **Build and push your code to your Linode VPS**
-   - Use `git` to clone or pull the latest code to your VPS, or use `rsync`/`scp` to copy files.
+### Auth
 
-2. **Set up environment variables and secrets**
-   - Ensure `apps/web/.env.production` and `infra/db.env` are present and contain production values. Never commit secrets to a public repo.
+Two paths, both checking against `process.env`:
 
-3. **Build and start the stack with Docker Compose**
-   - From the project root on your VPS, run:
-     ```sh
-     docker compose up --build -d
-     ```
-   - This will build the SvelteKit app, start the Node server, Postgres, and NGINX.
+- **API write endpoints** — `Authorization: Bearer $POST_SECRET`, used by iOS Shortcuts.
+- **Admin UI** — `POST /api/session` with `$ADMIN_PASSWORD` sets an httpOnly session
+  cookie. `admin/+page.server.ts` checks the cookie and either renders the login form
+  or the post list.
 
-4. **Verify the deployment**
-   - Visit your domain or server IP in a browser. NGINX should proxy requests to the SvelteKit app.
-   - Check logs with:
-     ```sh
-     docker compose logs -f
-     ```
+Both checks use `crypto.timingSafeEqual` (see `src/lib/auth.ts`). There is no user
+table, no sessions table, no auth library — the cookie value is the secret itself.
 
-5. **Update the stack**
-   - Pull new code, rebuild, and restart:
-     ```sh
-     git pull
-     docker compose up --build -d
-     ```
+### Storage boundaries
 
-### SSL (HTTPS) with Let's Encrypt
-   - Use Let's Encrypt/certbot to generate SSL certificates:
-     ```sh
-     sudo systemctl stop nginx  # or stop any service using port 80
-     sudo docker compose down   # if NGINX is running in Docker
-     sudo certbot certonly --standalone -d compostmodernism.org
-     ```
-   - Certificates will be saved in `/etc/letsencrypt/live/compostmodernism.org/`.
-   
-   - Restart the stack:
-     ```sh
-     docker compose up --build -d
-     ```
-   - Your site will now be available over HTTPS.
-   - To renew certificates, run:
-     ```sh
-     sudo certbot renew
-     ```
-   - (Optional) Set up a cron job for automatic renewal (Certbot usually does this by default).
+- **`posts.db`** — single SQLite file, baked into the container's working directory.
+  Volume-mounted in `docker-compose.yml` so it survives redeploys.
+- **Cloudflare R2** — two prefixes in one bucket: `images/` (public, served at
+  `R2_PUBLIC_URL`) and `backups/` (private, 90-day lifecycle rule).
+- **`archive/`** — git-tracked markdown export. Source of truth if `posts.db` is ever
+  lost; not currently re-imported on boot, but the format is stable enough to do so.
 
-### Continuous Deployment with GitHub Actions
-   - This project uses GitHub Actions to automate deployment to the Linode VPS on every push to `main`.
-   - The workflow is defined in `.github/workflows/deploy.yml` and:
-     - Connects to the server via SSH using a private key stored in GitHub Secrets (`VPS_SSH_KEY`).
-     - Runs the following commands on the server:
-       - `docker-compose down`
-       - `git pull`
-       - `docker-compose up --build -d`
-   - To set up:
-     1. Generate an SSH key pair on your local machine:
-        ```sh
-        ssh-keygen -t ed25519 -C "github-actions-deploy"
-        ```
-     2. Add the public key to your server's `~/.ssh/authorized_keys`.
-     3. Add the private key as the `VPS_SSH_KEY` secret in your GitHub repo.
-     4. Add your server's IP and username as `VPS_SSH_HOST` and `VPS_SSH_USER` secrets.
-     5. On every push to `main`, the workflow will deploy the latest code automatically.
+## Local development
 
-## Environment Variables & Secrets
+```sh
+cp .env.example .env       # fill in POST_SECRET, ADMIN_PASSWORD, R2_* values
+npm install
+npm run dev                # http://localhost:5173 — migrations run on first connection
+npm test                   # vitest, ~150 tests, runs against in-memory SQLite
+npm run check              # svelte-check
+npm run seed               # populate posts.db with fixtures (idempotent)
+```
 
-- SvelteKit app secrets are stored in `apps/web/.env.production`. Example:
+A `posts.db` file appears in the repo root on first run; it's gitignored.
 
-  ```env
-  DATABASE_URL=postgres://root:mysecretpassword@db:5432/compost
-  LUCIA_SECRET=replace_this_with_a_secure_random_string
-  NODE_ENV=production
-  PORT=3000
-  ```
+## Deployment
 
-- Postgres credentials are stored in `infra/db.env` and loaded by docker-compose. Example:
+CI/CD: pushing to `blog-engine` runs `.github/workflows/deploy.yml`, which gates on
+`npm run check && npm test && npm run build` and then SSHes to the VPS to
+`git pull && docker compose up -d --build`. After bring-up stabilizes, the trigger
+will move to `main`.
 
-  ```env
-  POSTGRES_USER=root
-  POSTGRES_PASSWORD=mysecretpassword
-  POSTGRES_DB=compost
-  ```
+Caddy is **not** part of this project's compose stack. It runs in a separate
+`~/gateway/` stack on the VPS; this repo's `Caddyfile` is bind-mounted into that
+container as a per-site config.
 
-- Both `.env.production` and `infra/db.env` are gitignored by default. Never commit production secrets to a public repository.
+First-time bootstrap (SSH keys, GitHub Secrets, gateway mount, container init) is
+documented step-by-step in `DEPLOY.md`.
 
-### 3. Database & ORM
-- [ ] Set up Postgres in Docker
-- [ ] Add Drizzle ORM to SvelteKit app
-- [ ] Define `Clip` and `Source` models
+## API
 
-### 4. Basic Features
-- [ ] Public feed page for clips
-- [ ] Protected route for adding new clips (JWT auth)
-
-## API Routes
-
-All write endpoints require a `Authorization: Bearer <POST_SECRET>` header unless noted. All responses are JSON.
+All write endpoints require `Authorization: Bearer $POST_SECRET` unless noted. All
+responses are JSON. All bodies are validated with `zod.safeParse`; invalid input
+returns `400` before any DB or R2 call.
 
 ### `POST /api/session`
 
@@ -194,8 +179,6 @@ Authenticates the admin. Sets an `httpOnly` session cookie on success.
 
 **Request body:** `{ password: string }`
 
----
-
 ### `POST /api/post`
 
 Creates a new post.
@@ -208,11 +191,10 @@ Creates a new post.
 
 **Request body:** `{ body: string, title?: string, url?: string, tags?: string[] }`
 
----
-
 ### `PATCH /api/post/[slug]`
 
-Updates an existing post. All fields are optional; omitted fields keep their existing values.
+Updates an existing post. All fields are optional; omitted fields keep their
+existing values.
 
 | Status | Body | Condition |
 |--------|------|-----------|
@@ -223,11 +205,10 @@ Updates an existing post. All fields are optional; omitted fields keep their exi
 
 **Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[] }`
 
----
-
 ### `POST /api/upload`
 
 Processes and uploads an image to R2. Resizes to ≤ 1600×1600 and converts to WebP.
+Records the resulting key in the `images` ledger.
 
 | Status | Body | Condition |
 |--------|------|-----------|
@@ -239,15 +220,10 @@ Processes and uploads an image to R2. Resizes to ≤ 1600×1600 and converts to 
 
 **Request body:** `multipart/form-data` with an `image` file field.
 
----
-
 ## References
+
 - [allanlasser.com](https://github.com/allanlasser/allanlasser.com)
 - [co-op.computer](https://github.com/allanlasser/co-op.computer)
 - [A Working Library](https://aworkinglibrary.com)
 - [Maggie Appleton](https://maggieappleton.com/)
 - [Simon Willison](https://simonwillison.net)
-
----
-
-_This README is the project memory. All major decisions, plans, and context should be captured here._
