@@ -30,11 +30,11 @@ describe('renderMarkdown', () => {
 
 	it('keeps body + image markdown together (the bread-post case)', () => {
 		const body =
-			'Made bread again. The starter is two years old now.\n\n![Loaf](https://images.compostmodernism.org/images/2026/05/16/abc.webp)';
+			'Made bread again. The starter is two years old now.\n\n![Loaf](https://static.compostmodernism.org/images/2026/05/16/abc.webp)';
 		const html = renderMarkdown(body);
 		expect(html).toMatch(/<p>Made bread again/);
 		expect(html).toContain('<img');
-		expect(html).toMatch(/src="https:\/\/images\.compostmodernism\.org\/images\/2026\/05\/16\/abc\.webp"/);
+		expect(html).toMatch(/src="https:\/\/static\.compostmodernism\.org\/images\/2026\/05\/16\/abc\.webp"/);
 	});
 
 	it('returns empty string for empty input (no spurious <p></p>)', () => {

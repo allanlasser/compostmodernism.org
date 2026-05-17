@@ -413,14 +413,14 @@ compostmodernism/
 
 1. Create a bucket named `compostmodernism`
 2. Under **Public access**, enable the R2 public bucket URL, or attach a custom subdomain
-   (`images.compostmodernism.org`) via a CNAME in your Cloudflare DNS settings pointing
+   (`static.compostmodernism.org`) via a CNAME in your Cloudflare DNS settings pointing
    to the bucket's `r2.dev` URL
 3. Create an **API token** with Object Read & Write permissions scoped to this bucket
 4. Note your **Account ID**, **Access Key ID**, and **Secret Access Key**
 
-The public base URL for images will be either:
+The public base URL for static files (images and backups) will be either:
 - `https://pub-XXXX.r2.dev` (default R2 URL), or
-- `https://images.compostmodernism.org` (custom subdomain — recommended)
+- `https://static.compostmodernism.org` (custom subdomain — recommended)
 
 Set `R2_PUBLIC_URL` in PM2 env to whichever you use.
 
@@ -1107,7 +1107,7 @@ R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET=compostmodernism
-R2_PUBLIC_URL=https://images.compostmodernism.org
+R2_PUBLIC_URL=https://static.compostmodernism.org
 ```
 
 Generate secrets:

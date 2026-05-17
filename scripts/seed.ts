@@ -3,7 +3,7 @@ import { createDb } from '../src/lib/db';
 import { permalink } from '../src/lib/slug';
 import { fixtures, imageFixtures } from './fixtures';
 
-const R2_BASE = (process.env.R2_PUBLIC_URL ?? 'https://images.compostmodernism.org').replace(
+const R2_BASE = (process.env.R2_PUBLIC_URL ?? 'https://static.compostmodernism.org').replace(
 	/\/$/,
 	''
 );
