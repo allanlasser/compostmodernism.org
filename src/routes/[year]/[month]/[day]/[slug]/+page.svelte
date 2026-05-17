@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Dateline from '$lib/components/Dateline.svelte';
   import TagList from '$lib/components/TagList.svelte';
+	import { renderMarkdown } from '$lib/markdown';
 
 	interface Props {
 		data: {
@@ -18,6 +19,7 @@
 
 	let { data }: Props = $props();
 	let post = $derived(data.post);
+	let bodyHtml = $derived(renderMarkdown(post.body));
 </script>
 
 <article class="post post--single">
@@ -33,7 +35,7 @@
         {/if}
       </h1>
     {/if}
-		<p>{post.body}</p>
+		<div class="body">{@html bodyHtml}</div>
     <Dateline date={post.date} />
 	</div>
 
@@ -69,9 +71,33 @@
 		text-decoration: underline;
 	}
 
-	.content p {
+	.body :global(p) {
 		font-size: var(--size-body);
 		line-height: var(--leading-body);
+		margin: 0;
+	}
+
+	.body :global(p + p) {
+		margin-top: var(--space-stack);
+	}
+
+	.body :global(img) {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin-top: var(--space-stack);
+	}
+
+	.body :global(a) {
+		color: inherit;
+	}
+
+	.body :global(strong) {
+		font-weight: 600;
+	}
+
+	.body :global(em) {
+		font-style: italic;
 	}
 
 	.link-marker {

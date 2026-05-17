@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Dateline from './Dateline.svelte';
   import TagList from './TagList.svelte';
+	import { renderMarkdown } from '$lib/markdown';
 
 	interface FeedItemData {
 		slug: string;
@@ -11,12 +12,13 @@
 		tags: { name: string; slug: string }[];
 		permalink: string;
 	}
-	
+
   interface Props {
 		item: FeedItemData;
 	}
 
 	let { item }: Props = $props();
+	let bodyHtml = $derived(renderMarkdown(item.body));
 </script>
 
 <article
@@ -37,7 +39,7 @@
         {/if}
       </h2>
     {/if}
-    <p>{item.body}</p>
+    <div class="body">{@html bodyHtml}</div>
     <a class="permalink" href={item.permalink}>
 			<Dateline date={item.date} />
 		</a>
@@ -71,20 +73,38 @@
 		text-decoration: underline;
 	}
 
-	.content p {
+	.body :global(p) {
 		font-size: var(--size-body);
 		line-height: var(--leading-body);
+		margin: 0;
+	}
+
+	.body :global(p + p) {
+		margin-top: var(--space-stack);
+	}
+
+	.body :global(img) {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin-top: var(--space-stack);
+	}
+
+	.body :global(a) {
+		color: inherit;
+	}
+
+	.body :global(strong) {
+		font-weight: 600;
+	}
+
+	.body :global(em) {
+		font-style: italic;
 	}
 
 	.post--titled h2 {
 		font-size: var(--size-lede);
 		line-height: var(--leading-lede);
-	}
-
-	.post--titled .lede {
-		font-size: var(--size-body);
-		line-height: var(--leading-body);
-		color: var(--color-ink-soft);
 	}
 
 	.post--link h2 {
