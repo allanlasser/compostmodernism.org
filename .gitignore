@@ -29,6 +29,8 @@ storybook-static
 # Local db + coverage
 posts.db
 posts.db-journal
+posts.db-shm
+posts.db-wal
 coverage/
 
 # Claude Code local state

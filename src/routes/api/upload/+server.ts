@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { uploadToR2 } from '$lib/r2';
+import { recordImage } from '$lib/db';
 import { isAuthorized } from '$lib/auth';
 import { z } from 'zod';
 
@@ -47,6 +48,8 @@ export const POST: RequestHandler = async (event) => {
 	} catch {
 		return json({ error: 'Upload failed' }, { status: 500 });
 	}
+
+	recordImage(key);
 
 	return json({ ok: true, url }, { status: 201 });
 };

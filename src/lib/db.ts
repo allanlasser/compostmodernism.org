@@ -1,6 +1,11 @@
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { slugify, hashSlug } from './slug';
+import { migrate } from './migrate';
+
+// db.ts is shared between the SvelteKit server and CLI scripts (init-db, seed,
+// export-and-backup). The SvelteKit-only `$env/dynamic/private` virtual module
+// can't be resolved by tsx, so read process.env directly here.
 
 export interface Tag {
 	name: string;
@@ -45,37 +50,21 @@ export interface InsertResult {
 	slug: string;
 }
 
-const SCHEMA = `
-	CREATE TABLE IF NOT EXISTS posts (
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		slug       TEXT    NOT NULL UNIQUE,
-		body       TEXT    NOT NULL,
-		title      TEXT,
-		url        TEXT,
-		created_at INTEGER NOT NULL
-	);
-
-	CREATE TABLE IF NOT EXISTS tags (
-		id   INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT    NOT NULL UNIQUE,
-		slug TEXT    NOT NULL UNIQUE
-	);
-
-	CREATE TABLE IF NOT EXISTS post_tags (
-		post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-		tag_id  INTEGER NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
-		PRIMARY KEY (post_id, tag_id)
-	);
-
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_slug ON posts (slug);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_slug  ON tags  (slug);
-`;
+export interface ImageRow {
+	id: number;
+	key: string;
+	uploaded_at: number;
+	title: string | null;
+	alt: string | null;
+	caption: string | null;
+	credit: string | null;
+}
 
 export function createDb(path: string) {
 	const raw = new Database(path);
 	if (path !== ':memory:') raw.pragma('journal_mode = WAL');
 	raw.pragma('foreign_keys = ON');
-	raw.exec(SCHEMA);
+	migrate(raw);
 
 	function uniqueSlug(candidate: string): string {
 		const exists = raw.prepare('SELECT 1 FROM posts WHERE slug = ?');
@@ -118,6 +107,38 @@ export function createDb(path: string) {
 		return { ...row, type: 'post', date: row.created_at, tags: getTagsForPost(row.id) };
 	}
 
+	function recordImage(key: string): ImageRow {
+		const now = Date.now();
+		raw.prepare('INSERT INTO images (key, uploaded_at) VALUES (?, ?) ON CONFLICT (key) DO NOTHING')
+			.run(key, now);
+		return raw.prepare('SELECT * FROM images WHERE key = ?').get(key) as ImageRow;
+	}
+
+	function extractImageKeys(body: string): Set<string> {
+		const base = process.env.R2_PUBLIC_URL;
+		const keys = new Set<string>();
+		if (!base) return keys;
+		const prefix = base.replace(/\/$/, '') + '/';
+		const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const pattern = new RegExp(escaped + '(images/[^\\s)"\'<>]+\\.webp)', 'g');
+		for (const match of body.matchAll(pattern)) keys.add(match[1]);
+		return keys;
+	}
+
+	function setPostImages(postId: number, body: string): void {
+		raw.prepare('DELETE FROM post_images WHERE post_id = ?').run(postId);
+		const keys = extractImageKeys(body);
+		if (!keys.size) return;
+		const select = raw.prepare('SELECT id FROM images WHERE key = ?');
+		const insert = raw.prepare(
+			'INSERT OR IGNORE INTO post_images (post_id, image_id) VALUES (?, ?)'
+		);
+		for (const key of keys) {
+			const row = select.get(key) as { id: number } | undefined;
+			if (row) insert.run(postId, row.id);
+		}
+	}
+
 	function insertPost(input: PostInput): InsertResult {
 		const now = Date.now();
 		const baseSlug = input.title ? slugify(input.title) : hashSlug(now);
@@ -130,6 +151,7 @@ export function createDb(path: string) {
 			.run(slug, input.body, input.title ?? null, input.url ?? null, now);
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
+		setPostImages(id, input.body);
 		return { id, slug };
 	}
 
@@ -183,12 +205,12 @@ export function createDb(path: string) {
 			'UPDATE posts SET body = ?, title = ?, url = ? WHERE slug = ?'
 		).run(update.body, update.title ?? null, update.url ?? null, slug);
 
-		if (Array.isArray(update.tags)) {
-			const post = raw.prepare('SELECT id FROM posts WHERE slug = ?').get(slug) as
-				| { id: number }
-				| undefined;
-			if (post) setPostTags(post.id, update.tags);
-		}
+		const post = raw.prepare('SELECT id FROM posts WHERE slug = ?').get(slug) as
+			| { id: number }
+			| undefined;
+		if (!post) return;
+		if (Array.isArray(update.tags)) setPostTags(post.id, update.tags);
+		setPostImages(post.id, update.body);
 	}
 
 	function deletePost(slug: string): void {
@@ -203,7 +225,9 @@ export function createDb(path: string) {
 		getPostsByTag,
 		getAllTags,
 		updatePost,
-		deletePost
+		deletePost,
+		recordImage,
+		setPostImages
 	};
 }
 
@@ -224,3 +248,6 @@ export const getAllTags: Db['getAllTags'] = () => defaultDb().getAllTags();
 export const updatePost: Db['updatePost'] = (slug, update) =>
 	defaultDb().updatePost(slug, update);
 export const deletePost: Db['deletePost'] = (slug) => defaultDb().deletePost(slug);
+export const recordImage: Db['recordImage'] = (key) => defaultDb().recordImage(key);
+export const setPostImages: Db['setPostImages'] = (postId, body) =>
+	defaultDb().setPostImages(postId, body);

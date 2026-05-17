@@ -10,14 +10,17 @@ const sharpChain = {
 
 vi.mock('sharp', () => ({ default: vi.fn(() => sharpChain) }));
 vi.mock('$lib/r2', () => ({ uploadToR2: vi.fn() }));
+vi.mock('$lib/db', () => ({ recordImage: vi.fn() }));
 vi.mock('$env/dynamic/private', () => ({ env: { POST_SECRET: 'test-secret' } }));
 
 import { POST } from './+server';
 import sharp from 'sharp';
 import { uploadToR2 } from '$lib/r2';
+import { recordImage } from '$lib/db';
 
 const mockSharp = vi.mocked(sharp);
 const mockUpload = vi.mocked(uploadToR2);
+const mockRecordImage = vi.mocked(recordImage);
 
 function makeRequest(file: File | null, auth?: string): Request {
 	const form = new FormData();
@@ -31,6 +34,7 @@ beforeEach(() => {
 	mockSharp.mockClear();
 	mockUpload.mockReset();
 	mockUpload.mockResolvedValue('https://images.example/key.webp');
+	mockRecordImage.mockReset();
 	for (const fn of Object.values(sharpChain)) (fn as ReturnType<typeof vi.fn>).mockClear();
 	sharpChain.rotate.mockReturnThis();
 	sharpChain.resize.mockReturnThis();
@@ -103,5 +107,15 @@ describe('POST /api/upload', () => {
 		expect(key).toMatch(/^images\/\d{4}\/\d{2}\/\d{2}\/[0-9a-f]{8}\.webp$/);
 		expect(buffer).toEqual(Buffer.from('processed-webp-bytes'));
 		expect(mime).toBe('image/webp');
+	});
+
+	it('successful upload records the image in the ledger with the same key', async () => {
+		const file = new File([new Uint8Array([1, 2, 3, 4])], 'photo.jpg', { type: 'image/jpeg' });
+		const res = await POST({
+			request: makeRequest(file, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(201);
+		expect(mockRecordImage).toHaveBeenCalledTimes(1);
+		expect(mockRecordImage).toHaveBeenCalledWith(mockUpload.mock.calls[0][0]);
 	});
 });
