@@ -1,5 +1,12 @@
+@property --bg-hue {
+	syntax: '<angle>';
+	inherits: true;
+	initial-value: 0deg;
+}
+
 :root {
-	--color-bg: #faffe1;
+	--bg-hue: 0deg;
+	--color-bg: hsl(var(--bg-hue) 100% 94%);
 	--color-ink: #4f2413;
 	--color-ink-soft: rgb(79 36 19 / 0.8);
 
@@ -40,6 +47,25 @@ body {
 	line-height: var(--leading-body);
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
+}
+
+html {
+	animation: hue-cycle 3600s linear infinite;
+}
+
+@keyframes hue-cycle {
+	from {
+		--bg-hue: 0deg;
+	}
+	to {
+		--bg-hue: 360deg;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		animation-play-state: paused;
+	}
 }
 
 a {
