@@ -1,9 +1,11 @@
 <script lang="ts">
-interface Props {
-  tags: { name: string; slug: string }[];
-}
+  import type { Tag } from "$lib/types";
 
-const { tags }: Props = $props();
+  interface Props {
+    tags: Tag[];
+  }
+
+  const { tags }: Props = $props();
 </script>
 
 {#if tags.length}

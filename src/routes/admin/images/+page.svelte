@@ -1,21 +1,10 @@
 <script lang="ts">
 	import ImagesTable from '$lib/components/admin/ImagesTable.svelte';
-
-	interface ImageRow {
-		id: number;
-		key: string;
-		url: string;
-		uploaded_at: number;
-		title: string | null;
-		alt: string | null;
-		caption: string | null;
-		credit: string | null;
-		usage_count: number;
-	}
+  import type { Image } from '$lib/types';
 
 	interface Props {
 		data: {
-			images: ImageRow[];
+			images: Image[];
 			page: number;
 			perPage: number;
 			total: number;
@@ -48,7 +37,7 @@
 </script>
 
 <header class="images-header">
-	<h1>Images</h1>
+	<p class="status">{data.total} {data.total === 1 ? 'image' : 'images'}</p>
 	<label class="upload">
 		<input type="file" accept="image/*" onchange={uploadNew} disabled={uploading} />
 		<span>{uploading ? 'Uploading…' : '+ Upload image'}</span>
@@ -72,8 +61,6 @@
 			<span class="muted">Next →</span>
 		{/if}
 	</nav>
-{:else}
-	<p class="status">{data.total} {data.total === 1 ? 'image' : 'images'}</p>
 {/if}
 
 <style>
@@ -82,12 +69,6 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-stack);
-	}
-
-	.images-header h1 {
-		font-family: var(--font-display);
-		font-style: italic;
-		font-size: var(--size-title);
 	}
 
 	.upload {

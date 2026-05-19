@@ -16,8 +16,8 @@
 
 	function preview(p: Row): string {
 		if (p.title) return p.title;
-		const cleaned = p.body.replace(/\s+/g, ' ').trim();
-		return cleaned.length > 80 ? cleaned.slice(0, 77) + '…' : cleaned;
+		const cleaned = p.body.split('\n')[0].replace(/\s+/g, ' ').trim();
+		return cleaned.length > 80 ? cleaned.slice(0, 70).trim() + '…' : cleaned;
 	}
 </script>
 
@@ -33,7 +33,7 @@
 		{#each posts as post (post.slug)}
 			<tr>
 				<td class="post-cell">
-					<a href="/admin/posts/{post.slug}" class="post-link">{preview(post)}</a>
+					<a href="/admin/posts/{post.slug}" class="post-link {post.title ? "post-title" : ""}">{preview(post)}</a>
 				</td>
 				<td class="date-cell">
 					<time datetime={new Date(post.date).toISOString()}>
@@ -76,12 +76,23 @@
 		color: var(--color-ink-soft);
 		font-weight: normal;
 	}
+  
+  .post-cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .post-title {
+    font-weight: 600;
+  }
 
 	.post-link {
 		text-decoration: none;
 		font-weight: 500;
 		font-size: var(--size-body);
 	}
+
 
 	.post-link:hover {
 		text-decoration: underline;

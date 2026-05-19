@@ -1,27 +1,16 @@
 <script lang="ts">
+  import type { Image } from '$lib/types';
 	import { untrack } from 'svelte';
 
-	interface Row {
-		id: number;
-		key: string;
-		url: string;
-		uploaded_at: number;
-		title: string | null;
-		alt: string | null;
-		caption: string | null;
-		credit: string | null;
-		usage_count: number;
-	}
-
 	interface Props {
-		images: Row[];
+		images: Image[];
 	}
 
 	let { images }: Props = $props();
 
 	type Meta = { title: string; alt: string; caption: string; credit: string };
 
-	let local = $state<Row[]>(untrack(() => images.map((r) => ({ ...r }))));
+	let local = $state<Image[]>(untrack(() => images.map((r) => ({ ...r }))));
 	let deleted = $state<Set<number>>(new Set());
 	let editing = $state<number | null>(null);
 	let drafts = $state<Record<number, Meta>>({});
@@ -33,7 +22,7 @@
 
 	const visible = $derived(local.filter((r) => !deleted.has(r.id)));
 
-	function metaFrom(r: Row): Meta {
+	function metaFrom(r: Image): Meta {
 		return {
 			title: r.title ?? '',
 			alt: r.alt ?? '',
@@ -42,7 +31,7 @@
 		};
 	}
 
-	function startEdit(r: Row) {
+	function startEdit(r: Image) {
 		drafts[r.id] = metaFrom(r);
 		editing = r.id;
 	}
@@ -51,7 +40,7 @@
 		editing = null;
 	}
 
-	async function saveEdit(r: Row) {
+	async function saveEdit(r: Image) {
 		const d = drafts[r.id];
 		if (!d) return;
 		saving.add(r.id);
@@ -70,7 +59,7 @@
 		saving.delete(r.id);
 		saving = new Set(saving);
 		if (res.ok) {
-			const j = (await res.json()) as { image: Partial<Row> };
+			const j = (await res.json()) as { image: Partial<Image> };
 			local = local.map((row) =>
 				row.id === r.id ? { ...row, ...j.image } : row
 			);
@@ -80,7 +69,7 @@
 		}
 	}
 
-	async function copyUrl(r: Row) {
+	async function copyUrl(r: Image) {
 		try {
 			await navigator.clipboard.writeText(r.url);
 			copied.add(r.id);
@@ -99,11 +88,11 @@
 		}
 	}
 
-	function triggerReplace(r: Row) {
+	function triggerReplace(r: Image) {
 		fileInputs[r.id]?.click();
 	}
 
-	async function onReplaceChosen(r: Row, e: Event) {
+	async function onReplaceChosen(r: Image, e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
@@ -124,7 +113,7 @@
 		}
 	}
 
-	async function remove(r: Row) {
+	async function remove(r: Image) {
 		const label = r.title ?? r.key;
 		if (!window.confirm(`Delete "${label}"? This also removes the file from R2.`)) return;
 		let res = await fetch(`/api/images/${r.id}`, { method: 'DELETE' });

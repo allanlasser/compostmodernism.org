@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SignOut from '$lib/components/admin/SignOut.svelte';
 	import '../app.css';
 	import type { Snippet } from 'svelte';
 
@@ -13,13 +14,16 @@
 <div class="page">
 	<header class="site-header">
 		<a class="site-title" href="/">compostmodernism</a>
-		<p class="byline">
-			{#if data?.admin}
-				<a class="admin-link" href="/admin">Admin</a>
-      {:else}
+    {#if data?.admin}
+      <div class="admin-links">
+        <a href="/admin">Admin</a>
+        <SignOut />
+      </div>
+    {:else}
+		  <p class="byline">
         by <a href="https://allanlasser.com">Allan Lasser</a>
-			{/if}
-		</p>
+      </p>
+    {/if}
 	</header>
 
 	<main class="site-main">
@@ -38,10 +42,11 @@
 	.site-header {
 		display: grid;
 		grid-template-columns: 1fr var(--space-rail);
+    align-items: baseline;
 		gap: var(--space-gap);
 		width: 100%;
 		max-width: var(--content-max);
-		padding: var(--space-header) var(--space-gap);
+		padding: var(--space-header) var(--space-gap) 0;
 	}
 
   .site-header a:hover {
@@ -57,19 +62,27 @@
 		white-space: nowrap;
 	}
 
+  .admin-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-self: baseline;
+    justify-content: flex-end;
+    gap: 1em;
+    font-style: italic;
+    font-size: var(--size-meta);
+    color: var(--color-ink-soft);
+  }
+
 	.byline {
-		align-self: center;
+		align-self: baseline;
 		font-style: italic;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
 	}
 
+  .admin-links a,
 	.byline a {
 		text-decoration: none;
-	}
-
-	.admin-link {
-		font-style: normal;
 	}
 
 	.site-main {
@@ -81,12 +94,12 @@
 
 	@media (max-width: 640px) {
 		.site-header {
-			grid-template-columns: 1fr;
+      align-items: baseline;
 			gap: var(--space-stack);
-			padding: var(--space-gap) var(--space-section);
+			padding: 2em 1em 0;
 		}
 		.site-main {
-			padding: var(--space-section);
+			padding: 0 1em;
 		}
 	}
 </style>

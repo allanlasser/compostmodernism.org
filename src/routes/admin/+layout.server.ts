@@ -1,13 +1,12 @@
 import { redirect, type ServerLoad } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { isAuthorized } from '$lib/auth';
 
 const LOGIN_PATH = '/admin/login';
 
-export const load: ServerLoad = async ({ cookies, url }) => {
-	const session = cookies.get('session');
-	const authed = Boolean(env.POST_SECRET) && session === env.POST_SECRET;
+export const load: ServerLoad = async event => {
+	const authed = isAuthorized(event);
 
-	if (url.pathname === LOGIN_PATH) {
+	if (event.url.pathname === LOGIN_PATH) {
 		if (authed) throw redirect(303, '/admin');
 		return { authed: false };
 	}

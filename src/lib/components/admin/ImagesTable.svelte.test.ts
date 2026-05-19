@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import ImagesTable from './ImagesTable.svelte';
+import type { Image } from '$lib/types';
 
 afterEach(() => {
 	cleanup();
@@ -8,19 +9,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-type Row = {
-	id: number;
-	key: string;
-	url: string;
-	uploaded_at: number;
-	title: string | null;
-	alt: string | null;
-	caption: string | null;
-	credit: string | null;
-	usage_count: number;
-};
-
-function img(over: Partial<Row> = {}): Row {
+function img(over: Partial<Image> = {}): Image {
 	return {
 		id: 1,
 		key: 'images/2026/05/13/abc.webp',

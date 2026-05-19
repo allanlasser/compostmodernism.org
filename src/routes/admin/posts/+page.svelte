@@ -24,8 +24,8 @@
 </script>
 
 <header class="posts-header">
-	<h1>Posts</h1>
-	<a class="new-post" href="/admin/posts/new">+ New post</a>
+  <p class="status">{data.total} {data.total === 1 ? 'post' : 'posts'}</p>
+  <a class="new-post" href="/admin/posts/new">+ New post</a>
 </header>
 
 <PostsTable posts={data.posts} />
@@ -37,15 +37,13 @@
 		{:else}
 			<span class="muted">← Prev</span>
 		{/if}
-		<span class="status">Page {data.page} of {data.totalPages} · {data.total} posts</span>
+		<span class="status">Page {data.page} of {data.totalPages}</span>
 		{#if data.page < data.totalPages}
 			<a href="?page={data.page + 1}" rel="next">Next →</a>
 		{:else}
 			<span class="muted">Next →</span>
 		{/if}
 	</nav>
-{:else}
-	<p class="status">{data.total} {data.total === 1 ? 'post' : 'posts'}</p>
 {/if}
 
 <style>
@@ -54,12 +52,6 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-stack);
-	}
-
-	.posts-header h1 {
-		font-family: var(--font-display);
-		font-style: italic;
-		font-size: var(--size-title);
 	}
 
 	.new-post {

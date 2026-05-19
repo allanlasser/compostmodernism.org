@@ -15,15 +15,6 @@
 		mode: 'create' | 'edit';
 		initial?: Initial;
 		onSuccess?: (slug: string, payload: PostInputParsed) => void;
-		onCancel?: () => void;
-		/** When true, the in-form body toolbar and actions row are not rendered.
-		 * The host is responsible for providing Save/Cancel/Insert-image controls,
-		 * typically targeting the form via `form={formId}` and binding to the
-		 * exposed `imageModalOpen` / `submitting` / `saved` props. */
-		hideActions?: boolean;
-		/** Optional id applied to the <form> element so external submit buttons
-		 * can reference it via the HTML `form` attribute. */
-		formId?: string;
 		imageModalOpen?: boolean;
 		submitting?: boolean;
 		saved?: boolean;
@@ -33,9 +24,6 @@
 		mode,
 		initial = {},
 		onSuccess,
-		onCancel,
-		hideActions = false,
-		formId,
 		imageModalOpen = $bindable(false),
 		submitting = $bindable(false),
 		saved = $bindable(false)
@@ -143,71 +131,88 @@
 	}
 
 	const buttonLabel = $derived(
-		submitting ? (mode === 'create' ? 'Posting…' : 'Saving…') : saved ? 'Saved ✓' : mode === 'create' ? 'Post' : 'Save'
+		submitting ? (mode === 'create' ? 'Publishing…' : 'Saving…') : saved ? 'Saved ✓' : mode === 'create' ? 'Publish' : 'Save'
 	);
+
+  let deleting = $state(false);
+
+	async function remove() {
+    if (!initial.slug) {
+      throw new Error('Missing slug!')
+    }
+		const label = title ?? initial.slug;
+		if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+		deleting = true;
+		const res = await fetch(`/api/post/${encodeURIComponent(initial.slug)}`, {
+			method: 'DELETE'
+		});
+		if (res.ok) {
+			window.location.href = '/admin/posts';
+		} else {
+			deleting = false;
+			window.alert(`Could not delete "${label}".`);
+		}
+	}
 </script>
 
-<form id={formId} class="post-form" onsubmit={submit} novalidate>
-	<label>
-		Title
-		<input type="text" bind:value={title} disabled={submitting} />
-		{#if fieldErrors.title}<span class="field-error">{fieldErrors.title}</span>{/if}
-	</label>
+<form class="post-form" onsubmit={submit} novalidate>
+  <div>
+    {#if formError}
+      <p class="form-error" role="alert">{formError}</p>
+    {/if}
+    <label>
+      <span class="label">Title</span>
+      <input type="text" bind:value={title} disabled={submitting} />
+      {#if fieldErrors.title}<span class="field-error">{fieldErrors.title}</span>{/if}
+    </label>
 
-	<label>
-		URL <span class="hint">(for link posts)</span>
-		<input type="url" bind:value={url} disabled={submitting} />
-		{#if fieldErrors.url}<span class="field-error">{fieldErrors.url}</span>{/if}
-	</label>
+    <label>
+      <span class="label">URL <span class="hint">(for link posts)</span></span>
+      <input type="url" bind:value={url} disabled={submitting} />
+      {#if fieldErrors.url}<span class="field-error">{fieldErrors.url}</span>{/if}
+    </label>
 
-	<label>
-		Tags <span class="hint">(comma-separated)</span>
-		<input
-			type="text"
-			bind:value={tags}
-			placeholder="food, travel, tech"
-			disabled={submitting}
-		/>
-		{#if fieldErrors.tags}<span class="field-error">{fieldErrors.tags}</span>{/if}
-	</label>
+    <label>
+      <span class="label">Tags <span class="hint">(comma-separated)</span></span>
+      <input
+        type="text"
+        bind:value={tags}
+        placeholder="food, travel, tech"
+        disabled={submitting}
+      />
+      {#if fieldErrors.tags}<span class="field-error">{fieldErrors.tags}</span>{/if}
+    </label>
 
-	<label>
-		Body
-		<textarea
-			rows="10"
-			bind:value={body}
-			bind:this={bodyTextarea}
-			disabled={submitting}
-		></textarea>
-		{#if fieldErrors.body}<span class="field-error">{fieldErrors.body}</span>{/if}
-	</label>
-	{#if !hideActions}
-		<div class="body-toolbar">
-			<button
-				type="button"
-				class="link"
-				onclick={() => (imageModalOpen = true)}
-				disabled={submitting}
-			>
-				Insert image
-			</button>
-		</div>
-	{/if}
+    <label>
+      <span class="label">Body</span>
+      <textarea
+        rows="10"
+        bind:value={body}
+        bind:this={bodyTextarea}
+        disabled={submitting}
+      ></textarea>
+      {#if fieldErrors.body}<span class="field-error">{fieldErrors.body}</span>{/if}
+    </label>
+    <div class="body-toolbar">
+      <button
+        type="button"
+        class="link"
+        onclick={() => (imageModalOpen = true)}
+        disabled={submitting}
+      >
+        Insert image
+      </button>
+    </div>
+  </div>
 
-	{#if formError}
-		<p class="form-error" role="alert">{formError}</p>
-	{/if}
-
-	{#if !hideActions}
-		<div class="actions">
-			{#if onCancel}
-				<button type="button" class="link cancel" onclick={onCancel} disabled={submitting}>
-					Cancel
-				</button>
-			{/if}
-			<button type="submit" disabled={submitting}>{buttonLabel}</button>
-		</div>
-	{/if}
+  <div class="actions">
+    <button type="submit" disabled={submitting}>{buttonLabel}</button>
+    {#if mode === "edit"}
+    <button type="button" class="delete" onclick={remove} disabled={deleting}>
+      {deleting ? 'Deleting…' : 'Delete post'}
+    </button>
+    {/if}
+  </div>
 </form>
 
 {#if imageModalOpen}
@@ -222,9 +227,10 @@
 
 <style>
 	.post-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-stack);
+		display: grid;
+		grid-template-columns: minmax(66ch, 1fr) var(--space-rail);
+		gap: var(--space-gap);
+		width: 100%;
 	}
 
 	.post-form label {
@@ -233,6 +239,7 @@
 		gap: 0.25em;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
+    margin-bottom: var(--space-stack);
 	}
 
 	.post-form input,
@@ -240,7 +247,17 @@
 	.post-form button {
 		font: inherit;
 		padding: 0.4em 0.6em;
+    background: rgb(255 255 255 / 0.5);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    &:focus, &:hover {
+      background: rgb(255 255 255);
+    }
 	}
+
+  .post-form button {
+    cursor: pointer;
+  }
 
 	.post-form textarea {
 		font-family: var(--font-serif);
@@ -260,7 +277,7 @@
 
 	.actions {
 		display: flex;
-		justify-content: flex-end;
+    flex-direction: column;
 		gap: var(--space-stack);
 	}
 
@@ -268,7 +285,6 @@
 		min-width: 6em;
 	}
 
-	.actions .link.cancel,
 	.body-toolbar .link {
 		font: inherit;
 		font-style: italic;
@@ -279,7 +295,6 @@
 		color: var(--color-ink-soft);
 	}
 
-	.actions .link.cancel:hover:not(:disabled),
 	.body-toolbar .link:hover:not(:disabled) {
 		color: var(--color-ink);
 		text-decoration: underline;
@@ -289,5 +304,22 @@
 		display: flex;
 		justify-content: flex-end;
 		margin-top: 0.25em;
+	}
+
+	button.delete {
+		font: inherit;
+		font-style: italic;
+		background: transparent;
+		border: 0;
+		padding: 0.25em 0.5em;
+		cursor: pointer;
+		color: #a13c1f;
+    &:hover {
+      background: #d5431b28;
+    }
+	}
+
+	button.delete:hover:not(:disabled) {
+		text-decoration: underline;
 	}
 </style>

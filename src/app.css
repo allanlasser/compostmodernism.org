@@ -7,8 +7,10 @@
 :root {
 	--bg-hue: 0deg;
 	--color-bg: hsl(var(--bg-hue) 100% 94%);
-	--color-ink: #4f2413;
-	--color-ink-soft: rgb(79 36 19 / 0.8);
+	--color-ink: rgb(38 29 26 / 0.8);
+	--color-ink-soft: rgb(38 29 26 / 0.6);
+  --color-ink-dim: rgb(38 29 26 / 0.4);
+  --color-border: rgb(38 29 26 / 0.2);
 
 	--font-serif: 'Gentium Book Plus', 'Gentium Book Basic', Georgia, serif;
 	--font-display: 'Gentium Plus', 'Gentium Basic', Georgia, serif;
@@ -88,4 +90,11 @@ ul {
 	margin: 0;
 	padding: 0;
 	list-style: none;
+}
+
+button {
+  appearance: none;
+  font-size: 1em;
+  font-weight: 1em;
+  border: none;
 }

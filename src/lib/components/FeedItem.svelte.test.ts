@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import FeedItem from './FeedItem.svelte';
+import type { Post } from '$lib/types';
 
 afterEach(() => {
 	cleanup();
@@ -9,14 +10,8 @@ afterEach(() => {
 });
 
 function item(
-	over: Partial<{
-		slug: string;
-		body: string;
-		title: string | null;
-		url: string | null;
-		tags: { name: string; slug: string }[];
-	}> = {}
-) {
+	over: Partial<Post> = {}
+): Post {
 	return {
 		slug: 'hello',
 		body: 'body text',
