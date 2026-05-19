@@ -2,32 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { insertPost } from '$lib/db';
 import { permalink } from '$lib/slug';
 import { isAuthorized } from '$lib/auth';
-import { z } from 'zod';
-
-function isString(t: unknown): t is string {
-  return typeof t === 'string' && t.trim().length > 0
-}
-
-const emptyToNull = z
-	.string()
-	.trim()
-	.nullish()
-	.transform((v) => v || null);
-
-const postInputSchema = z.object({
-	body: z.string().trim().min(1, 'body is required'),
-	title: emptyToNull,
-	url: emptyToNull,
-	tags: z
-		.array(z.unknown())
-		.optional()
-		.default([])
-		.transform((arr) =>
-			arr
-				.filter(isString)
-				.map((s) => s.trim())
-		)
-});
+import { postInputSchema } from '$lib/schemas';
 
 export const POST: RequestHandler = async (event) => {
 	if (!isAuthorized(event)) {
@@ -48,7 +23,7 @@ export const POST: RequestHandler = async (event) => {
 	const result = insertPost({ body, title, url, tags });
 
 	return json(
-		{ ok: true, permalink: permalink({ slug: result.slug, created_at: Date.now() }) },
+		{ ok: true, slug: result.slug, permalink: permalink({ slug: result.slug, created_at: Date.now() }) },
 		{ status: 201 }
 	);
 };

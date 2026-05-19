@@ -50,7 +50,7 @@ describe('POST /api/post', () => {
 		expect(res.status).toBe(400);
 	});
 
-	it('201 plain post → returns ok + permalink', async () => {
+	it('201 plain post → returns ok + slug + permalink', async () => {
 		mockInsert.mockReturnValue({ id: 1, slug: '8charhex' });
 		const res = await POST({
 			request: req({ body: 'a thought' }, 'Bearer test-secret')
@@ -58,6 +58,7 @@ describe('POST /api/post', () => {
 		expect(res.status).toBe(201);
 		const json = await res.json();
 		expect(json.ok).toBe(true);
+		expect(json.slug).toBe('8charhex');
 		expect(json.permalink).toMatch(/^\/\d{4}\/\d{2}\/\d{2}\/8charhex$/);
 	});
 

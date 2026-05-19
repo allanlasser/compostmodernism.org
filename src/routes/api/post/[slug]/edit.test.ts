@@ -2,17 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('$lib/db', () => ({
 	getPostBySlug: vi.fn(),
-	updatePost: vi.fn()
+	updatePost: vi.fn(),
+	deletePost: vi.fn()
 }));
 vi.mock('$env/dynamic/private', () => ({
 	env: { POST_SECRET: 'test-secret' }
 }));
 
-import { PATCH } from './+server';
-import { getPostBySlug, updatePost } from '$lib/db';
+import { PATCH, DELETE } from './+server';
+import { getPostBySlug, updatePost, deletePost } from '$lib/db';
 
 const mockGet = vi.mocked(getPostBySlug);
 const mockUpdate = vi.mocked(updatePost);
+const mockDelete = vi.mocked(deletePost);
 
 function req(body: unknown, auth?: string): Request {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -43,6 +45,7 @@ const existing = {
 beforeEach(() => {
 	mockGet.mockReset();
 	mockUpdate.mockReset();
+	mockDelete.mockReset();
 });
 
 describe('PATCH /api/post/[slug]', () => {
@@ -137,5 +140,51 @@ describe('PATCH /api/post/[slug]', () => {
 			'hello',
 			expect.objectContaining({ tags: ['a', 'b'] })
 		);
+	});
+});
+
+function delReq(auth?: string): Request {
+	const headers: Record<string, string> = {};
+	if (auth) headers.Authorization = auth;
+	return new Request('http://localhost/api/post/x', { method: 'DELETE', headers });
+}
+
+describe('DELETE /api/post/[slug]', () => {
+	it('401 when unauthorized', async () => {
+		const res = await DELETE({ request: delReq(), params: { slug: 'hello' } } as never);
+		expect(res.status).toBe(401);
+		expect(mockDelete).not.toHaveBeenCalled();
+	});
+
+	it('404 when slug does not exist', async () => {
+		mockGet.mockReturnValue(null);
+		const res = await DELETE({
+			request: delReq('Bearer test-secret'),
+			params: { slug: 'nope' }
+		} as never);
+		expect(res.status).toBe(404);
+		expect(mockDelete).not.toHaveBeenCalled();
+	});
+
+	it('200 when authorized and post exists → calls deletePost', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await DELETE({
+			request: delReq('Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockDelete).toHaveBeenCalledWith('hello');
+		expect(await res.json()).toEqual({ ok: true });
+	});
+
+	it('also accepts session cookie auth', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await DELETE({
+			request: delReq(),
+			cookies: cookies('test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockDelete).toHaveBeenCalledWith('hello');
 	});
 });

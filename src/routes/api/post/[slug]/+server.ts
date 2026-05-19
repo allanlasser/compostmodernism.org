@@ -1,50 +1,52 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { getPostBySlug, updatePost } from '$lib/db';
+import { getPostBySlug, updatePost, deletePost } from '$lib/db';
 import { isAuthorized } from '$lib/auth';
-import { z } from 'zod';
-
-const postUpdateSchema = z.object({
-	body: z.string().trim().optional(),
-	title: z.string().trim().nullable().optional(),
-	url: z.string().trim().nullable().optional(),
-	tags: z.array(z.string().trim()).optional()
-});
+import { postUpdateSchema } from '$lib/schemas';
 
 export const PATCH: RequestHandler = async (event) => {
 	const { request, params } = event;
 
-  // We need to be authenticated (Bearer token or session cookie)
-  if (!isAuthorized(event)) {
-    return json({ error: 'Unauthorized' }, { status: 401 });
-  }
+	if (!isAuthorized(event)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
 
-  // We need to have a slug in the route
-  const slug = params.slug;
-  if (!slug) return json({ error: 'Slug not provided' }, { status: 400 });
+	const slug = params.slug;
+	if (!slug) return json({ error: 'Slug not provided' }, { status: 400 });
 
-  // We need to match the slug to a post
-  const post = getPostBySlug(slug);
-  if (!post) return json({ error: 'Not found' }, { status: 404 });
+	const post = getPostBySlug(slug);
+	if (!post) return json({ error: 'Not found' }, { status: 404 });
 
-  // We need to validate our incoming data
-  const parsed = postUpdateSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
-  }
+	const parsed = postUpdateSchema.safeParse(await request.json());
+	if (!parsed.success) {
+		return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
+	}
 
-  const { body, title, url, tags } = parsed.data;
+	const { body, title, url, tags } = parsed.data;
 
-  // Link posts require a title in addition to a URL
-  if (url && !title) {
-    return json({ error: 'title is required when url is provided' }, { status: 400 });
-  }
+	if (url && !title) {
+		return json({ error: 'title is required when url is provided' }, { status: 400 });
+	}
 
-  // Now we're ready to update the post.
-  updatePost(slug, {
-    body: body ?? post.body,
-    title: title !== undefined ? title : post.title,
-    url: url !== undefined ? url : post.url,
-    tags
-  });
-  return json({ ok: true });
+	updatePost(slug, {
+		body: body ?? post.body,
+		title: title !== undefined ? title : post.title,
+		url: url !== undefined ? url : post.url,
+		tags
+	});
+	return json({ ok: true });
+};
+
+export const DELETE: RequestHandler = async (event) => {
+	if (!isAuthorized(event)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	const slug = event.params.slug;
+	if (!slug) return json({ error: 'Slug not provided' }, { status: 400 });
+
+	const post = getPostBySlug(slug);
+	if (!post) return json({ error: 'Not found' }, { status: 404 });
+
+	deletePost(slug);
+	return json({ ok: true });
 };
