@@ -1,5 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/svelte';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
+
+const pageState = vi.hoisted(() => ({ data: { admin: false } as { admin: boolean } }));
+vi.mock('$app/state', () => ({ page: pageState }));
+
 import Page from './+page.svelte';
 
 interface FeedItem {
@@ -25,7 +29,12 @@ function item(over: Partial<FeedItem> = {}): FeedItem {
 	};
 }
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	pageState.data.admin = false;
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
 
 describe('feed page', () => {
 	it('link post — external <a> on title with ➻ marker', () => {
@@ -89,5 +98,67 @@ describe('feed page', () => {
 		const link = container.querySelector('a.permalink') as HTMLAnchorElement;
 		expect(link.getAttribute('href')).toBe('/2026/01/15/x');
 		expect(link.querySelector('time')).not.toBeNull();
+	});
+
+	it('admin=false: no + New post toggle', () => {
+		const { queryByRole } = render(Page, {
+			props: { data: { feed: [item()] } }
+		});
+		expect(queryByRole('button', { name: '+ New post' })).toBeNull();
+	});
+
+	it('admin=true: shows + New post toggle above the feed', () => {
+		pageState.data.admin = true;
+		const { getByRole } = render(Page, {
+			props: { data: { feed: [item()] } }
+		});
+		expect(getByRole('button', { name: '+ New post' })).not.toBeNull();
+	});
+
+	it('clicking + New post reveals an inline PostForm; Cancel hides it', async () => {
+		pageState.data.admin = true;
+		const { container, getByRole } = render(Page, {
+			props: { data: { feed: [item()] } }
+		});
+		await fireEvent.click(getByRole('button', { name: '+ New post' }));
+		expect(container.querySelector('article.post--compose form.post-form')).not.toBeNull();
+		await fireEvent.click(getByRole('button', { name: 'Cancel' }));
+		expect(container.querySelector('article.post--compose')).toBeNull();
+		expect(getByRole('button', { name: '+ New post' })).not.toBeNull();
+	});
+
+	it('on successful POST, prepends the new post to the feed and closes the composer', async () => {
+		pageState.data.admin = true;
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ ok: true, slug: 'brand-new' }), {
+				status: 201,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { container, getByRole } = render(Page, {
+			props: { data: { feed: [item({ slug: 'old', title: 'Old', body: 'old body' })] } }
+		});
+
+		await fireEvent.click(getByRole('button', { name: '+ New post' }));
+		const titleInput = container.querySelectorAll('input')[0] as HTMLInputElement;
+		const bodyTextarea = container.querySelector('textarea') as HTMLTextAreaElement;
+		await fireEvent.input(titleInput, { target: { value: 'Fresh' } });
+		await fireEvent.input(bodyTextarea, { target: { value: 'fresh body' } });
+		await fireEvent.click(getByRole('button', { name: 'Post' }));
+
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// Composer is gone.
+		expect(container.querySelector('article.post--compose')).toBeNull();
+
+		// Two posts in the feed; the new one is first.
+		const articles = container.querySelectorAll('article.post');
+		expect(articles.length).toBe(2);
+		const firstHeading = articles[0].querySelector('h2');
+		expect(firstHeading?.textContent?.trim()).toBe('Fresh');
 	});
 });
