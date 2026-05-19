@@ -29,6 +29,47 @@ without a split.
 
 ---
 
+## `+page.server.ts` and `+server.ts` reject unknown named exports
+
+SvelteKit validates the exports of every `+page.server.ts`, `+layout.server.ts`,
+and `+server.ts` module against a fixed whitelist. Anything else throws at
+request time as `Error: Invalid export 'X' in src/routes/.../+page.server.ts`,
+which surfaces as a generic 500 because SvelteKit hides the underlying
+message in production-style responses.
+
+Allowed unprefixed exports:
+
+- `+page.server.ts` / `+layout.server.ts`: `load`, `actions`, `prerender`,
+  `csr`, `ssr`, `trailingSlash`, `config`, `entries`.
+- `+server.ts`: the HTTP method handlers (`GET`, `POST`, …), plus `prerender`,
+  `csr`, `ssr`, `trailingSlash`, `config`, `entries`, `fallback`.
+
+Anything else **must** be prefixed with `_` — those are treated as private
+and skipped by the validator. Example we hit during Phase 10: a `PER_PAGE`
+constant exported from `+page.server.ts` so tests could import it. The fix
+is to rename to `_PER_PAGE` and update the test imports; SvelteKit then
+leaves it alone. Validation only fires when the request actually hits the
+route, so this is invisible in `npm test` (which imports the module
+directly) and `npm run check` — only manual browser navigation surfaces it.
+
+### Diagnosing the generic 500
+
+Vite's dev log doesn't print these errors by default, and the response body
+is just `{"message":"Internal Error"}`. To see the underlying exception,
+add a `handleError` hook temporarily:
+
+```ts
+// src/hooks.server.ts
+export const handleError: HandleServerError = ({ error, event }) => {
+  console.error('[handleError]', event.url.pathname, error);
+  return { message: 'Internal Error' };
+};
+```
+
+Hit the failing route, read the dev-server log, then remove the hook.
+
+---
+
 ## Image replace overwrites the same R2 key — beware browser/CDN caches
 
 `POST /api/images/[id]/replace` uploads new bytes to the **same** R2 key as

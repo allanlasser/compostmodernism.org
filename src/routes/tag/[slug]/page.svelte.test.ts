@@ -1,5 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/svelte';
+
+vi.mock('$app/state', () => ({ page: { data: { admin: false } } }));
+
 import Page from './+page.svelte';
 
 const ts = Date.UTC(2026, 0, 15);

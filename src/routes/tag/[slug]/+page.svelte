@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import FeedItem from '$lib/components/FeedItem.svelte';
 
 	interface Props {
@@ -17,13 +18,14 @@
 	}
 
 	let { data }: Props = $props();
+	const admin = $derived(Boolean(page.data.admin));
 </script>
 
 <div class="feed">
 	<h1 class="tag-heading">#{data.tag}</h1>
 
 	{#each data.feed as item (item.slug)}
-		<FeedItem {item} />
+		<FeedItem {item} {admin} />
 	{/each}
 </div>
 

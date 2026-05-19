@@ -14,9 +14,10 @@
 	<header class="site-header">
 		<a class="site-title" href="/">compostmodernism</a>
 		<p class="byline">
-			by <a href="https://allanlasser.com">Allan Lasser</a>
 			{#if data?.admin}
-				· <a class="admin-link" href="/admin">Admin</a>
+				<a class="admin-link" href="/admin">Admin</a>
+      {:else}
+        by <a href="https://allanlasser.com">Allan Lasser</a>
 			{/if}
 		</p>
 	</header>
@@ -42,6 +43,10 @@
 		max-width: var(--content-max);
 		padding: var(--space-header) var(--space-gap);
 	}
+
+  .site-header a:hover {
+    text-decoration: underline;
+  }
 
 	.site-title {
 		font-family: var(--font-display);
