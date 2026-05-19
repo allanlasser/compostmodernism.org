@@ -179,6 +179,12 @@ Authenticates the admin. Sets an `httpOnly` session cookie on success.
 
 **Request body:** `{ password: string }`
 
+### `DELETE /api/session`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 200 | `{ ok: true }` | Session cookie cleared (sign out) |
+
 ### `POST /api/post`
 
 Creates a new post.
@@ -187,7 +193,7 @@ Creates a new post.
 |--------|------|-----------|
 | 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
 | 400 | `{ error }` | Invalid body, or `url` provided without `title` |
-| 201 | `{ ok: true, permalink: string }` | Post created |
+| 201 | `{ ok: true, slug: string, permalink: string }` | Post created |
 
 **Request body:** `{ body: string, title?: string, url?: string, tags?: string[] }`
 
@@ -205,6 +211,14 @@ existing values.
 
 **Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[] }`
 
+### `DELETE /api/post/[slug]`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
+| 404 | `{ error: "Not found" }` | No post with that slug |
+| 200 | `{ ok: true }` | Post deleted |
+
 ### `POST /api/upload`
 
 Processes and uploads an image to R2. Resizes to ≤ 1600×1600 and converts to WebP.
@@ -219,6 +233,68 @@ Records the resulting key in the `images` ledger.
 | 201 | `{ ok: true, url: string }` | Uploaded; `url` is the public R2 URL |
 
 **Request body:** `multipart/form-data` with an `image` file field.
+
+### `GET /api/images`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing auth |
+| 200 | `{ images: [...], page, perPage, total, totalPages }` | Paginated list of ledger rows; each row includes `url` and `usage_count` |
+
+**Query params:** `?page=N` (default 1).
+
+### `PATCH /api/images/[id]`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing auth |
+| 400 | `{ error }` | Invalid `id`, or invalid metadata payload |
+| 404 | `{ error: "Not found" }` | Image id does not exist |
+| 200 | `{ ok: true, image: { ... } }` | Metadata updated; row returned |
+
+**Request body:** JSON object with optional `title`, `alt`, `caption`, `credit` (each string or `null`).
+
+### `DELETE /api/images/[id]`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing auth |
+| 404 | `{ error: "Not found" }` | Image id does not exist |
+| 409 | `{ error, posts: [{ slug, title }] }` | Image is referenced and `?force=true` was not passed — re-issue with `?force=true` to override |
+| 500 | `{ error }` | R2 delete failed (DB row preserved) |
+| 200 | `{ ok: true }` | R2 object deleted then DB row removed |
+
+### `POST /api/images/[id]/replace`
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 401 | `{ error: "Unauthorized" }` | Missing auth |
+| 400 | `{ error }` | Invalid id, or `image` field missing |
+| 404 | `{ error: "Not found" }` | Image id does not exist |
+| 500 | `{ error }` | Sharp pipeline or R2 upload threw |
+| 200 | `{ ok: true, url: string }` | Bytes uploaded to the *same* R2 key; `uploaded_at` bumped. `url` is unchanged from the prior version, so posts referencing the image stay intact. |
+
+**Request body:** `multipart/form-data` with an `image` file field.
+
+## Admin UI
+
+After signing in at `/admin/login`, the admin area exposes:
+
+- `/admin/posts` — paginated table of every post with View / Edit / Delete actions.
+- `/admin/posts/new` — composer for a new post (uses the shared `PostForm`).
+- `/admin/posts/[slug]` — standalone editor for an existing post.
+- `/admin/images` — image ledger as a table with thumbnail, usage count, and per-row Copy URL / Edit metadata / Replace / Delete actions.
+
+Both posting channels share the same backend: the admin UI uses `fetch` against the same API endpoints that iOS Shortcuts hit.
+
+When signed in, the public site itself gains lightweight admin affordances:
+
+- The site header byline gets a "+ New post" link beside "Admin" (navigates to `/admin/posts/new`).
+- The home feed also gets an inline "+ New post" toggle at the top. Clicking it reveals a `PostForm` in compose mode in place; saving prepends the new post to the feed without navigation.
+- Every post in the feed and on its permalink page gets an "Edit" link in its right-hand rail. Clicking it replaces the rendered title + body in place with the `PostForm` (Save / Cancel / Insert image). Saving updates the rendered post without leaving the page; each post owns its own draft.
+- Inside `PostForm`, "Insert image" opens a modal that uploads via `POST /api/upload` and splices the returned URL into the body at the cursor.
+
+None of these affordances are visible to unauthenticated readers — they show only when the layout's `data.admin` flag is true.
 
 ## References
 

@@ -35,4 +35,5 @@ coverage/
 
 # Claude Code local state
 .claude/
+.playwright-mcp/
 

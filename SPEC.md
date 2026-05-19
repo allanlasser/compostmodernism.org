@@ -819,6 +819,38 @@ export async function POST({ request, cookies }) {
 
 ## 8. Admin UI
 
+> **Phase 10 update (admin CMS expansion).** The single accordion page
+> originally described below has been replaced by a multi-route admin section.
+> The shape now is:
+>
+> - `src/routes/admin/+layout.server.ts` redirects unauthenticated requests to
+>   `/admin/login` and otherwise returns `{ authed: true }`. The login route is
+>   the only `/admin/*` path that loads without a session.
+> - `src/routes/admin/+layout.svelte` renders `AdminNav` (Posts / Images / Sign
+>   out) when `data.authed`. Sign out hits `DELETE /api/session`.
+> - `src/routes/admin/+page.server.ts` is now a redirect to `/admin/posts` —
+>   there is no `+page.svelte` under `/admin/`.
+> - `src/routes/admin/posts/+page.svelte` renders `<PostsTable>` against a
+>   paginated slice (`?page=N`, page size `PER_PAGE = 25`).
+> - `src/routes/admin/posts/new/+page.svelte` renders `<PostForm mode="create">`.
+> - `src/routes/admin/posts/[slug]/+page.svelte` renders `<PostForm mode="edit">`
+>   with a danger-zone Delete button.
+> - `src/routes/admin/images/+page.svelte` renders `<ImagesTable>` for the
+>   image ledger (Copy URL / Edit metadata / Replace / Delete per row), plus
+>   an "Upload image" affordance.
+>
+> Shared schemas live in `src/lib/schemas.ts` (`postInputSchema`,
+> `postUpdateSchema`, `imageMetadataSchema`) and are imported by both the
+> client `PostForm` (for pre-submit `safeParse`) and the API route handlers.
+>
+> Image deletion goes through `deleteFromR2` in `src/lib/r2.ts` followed by
+> `deleteImage` in the DB. Image replacement reuses the existing R2 key so
+> URLs stay valid for already-published posts — see NOTES.md for the cache
+> implications of that choice.
+>
+> The historical snippets below describe the pre-expansion admin and remain
+> for context; they no longer match the running code.
+
 ### `src/routes/admin/+page.server.js`
 
 ```javascript

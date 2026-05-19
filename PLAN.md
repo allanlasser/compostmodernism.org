@@ -590,6 +590,324 @@ every change after Phase 9 goes through `migrations/`.
 
 ---
 
+## Phase 10 — Admin CMS Expansion
+
+**Goal:** Turn `/admin` from a single accordion page into a full content
+management surface: create posts, edit on standalone routes from a
+paginated table, browse the image ledger as a table with metadata edit,
+copy-URL, replace, and delete actions. Adds a second posting channel
+alongside iOS Shortcuts.
+
+Design decisions confirmed with the user:
+
+- Single shared `PostForm.svelte` (mode prop), used by create and edit.
+- Dedicated `/admin/login` route; `+layout.server.ts` redirects there.
+- Image delete also removes the R2 object (add `deleteFromR2`).
+- When an image is referenced by posts, the **replace** flow uploads new
+  bytes to the same R2 key — URLs unchanged, no post-body edits needed.
+  Hard delete is still available with confirm + usage list.
+
+Sub-phases follow red→green TDD, one commit cluster per sub-phase.
+
+### 10.1 Auth layout + login route + sign-out
+
+- `src/routes/admin/+layout.server.ts` — redirects to `/admin/login`
+  unless authed; returns `{ authed: true }` otherwise. Allows
+  `/admin/login` through with `{ authed: false }`; redirects authed
+  visitors away from login.
+- `src/routes/admin/+layout.svelte` — renders `AdminNav` when authed.
+- `src/lib/components/admin/AdminNav.svelte` — Posts / Images links and a
+  Sign out button (`DELETE /api/session`).
+- `src/routes/admin/login/+page.svelte` — sign-in form posting to
+  `POST /api/session`, navigates to `/admin` on success.
+- `DELETE /api/session` — clears the `session` cookie.
+
+Tests:
+
+- `src/routes/admin/layout.server.test.ts` — six cases covering the auth
+  matrix (no/wrong/correct session × `/admin` vs `/admin/login` vs deeper
+  child path).
+- `src/routes/api/session/session.test.ts` — DELETE clears the cookie.
+- `src/lib/components/admin/AdminNav.svelte.test.ts` — renders links;
+  sign-out triggers fetch DELETE and navigates.
+- `src/routes/admin/login/page.svelte.test.ts` — input + button render;
+  submit posts the password; 401 shows error and clears the field.
+- `src/routes/admin/layout.svelte.test.ts` — nav visible only when
+  `data.authed === true`.
+
+Checkpoint 10.1:
+
+- [x] All new tests green; full suite stays at 167 tests passing.
+- [x] `npm run check` clean.
+- [ ] Manual: sign out from any admin sub-page returns to `/admin/login`;
+      visiting `/admin/login` while authed redirects to `/admin`.
+
+### 10.2 Shared schemas + DB pagination
+
+- `src/lib/schemas.ts` — extract `postInputSchema` and `postUpdateSchema`
+  from the existing API route files; add `imageMetadataSchema`.
+- Refactor `src/routes/api/post/+server.ts` and
+  `src/routes/api/post/[slug]/+server.ts` to import from `$lib/schemas`
+  (no behaviour change; tests stay green).
+- `src/lib/db.ts` — extend `getPosts({ limit, offset })`; add
+  `countPosts()`.
+- DB tests for offset and count.
+
+### 10.3 Posts table at `/admin/posts`
+
+- `src/lib/components/admin/PostsTable.svelte` — rows: preview/title,
+  date, tags, actions (View, Edit, Delete placeholder until 10.6).
+- `src/routes/admin/posts/+page.server.ts` — reads `?page`, fetches the
+  slice and total count.
+- `src/routes/admin/posts/+page.svelte` — renders the table with
+  pagination controls.
+- `src/routes/admin/+page.server.ts` — drop the accordion data load and
+  redirect to `/admin/posts`. (The accordion `+page.svelte` becomes
+  unreachable; cleanup in 10.10.)
+
+### 10.4 Standalone edit route + `PostForm` component
+
+- `src/lib/components/admin/PostForm.svelte` — `mode: 'create' | 'edit'`,
+  optional `initial`, `onSuccess` callback. Client-side `safeParse`
+  against the shared Zod schema; per-field error messages; submits via
+  fetch.
+- `src/routes/admin/posts/[slug]/+page.server.ts` — load by slug or 404.
+- `src/routes/admin/posts/[slug]/+page.svelte` — renders `<PostForm
+  mode="edit" />` with a View link.
+
+### 10.5 Create new post
+
+- `src/routes/admin/posts/new/+page.svelte` — `<PostForm mode="create"
+  />`.
+- Extend `POST /api/post` response to include `slug`; client navigates
+  to `/admin/posts/[new-slug]` on success.
+
+### 10.6 Delete post endpoint + UI
+
+- `DELETE /api/post/[slug]` — auth, 404, 200.
+- Delete buttons (with confirm) in `PostsTable` rows and on the edit
+  page; navigate back to `/admin/posts` on success.
+
+### 10.7 Image DB helpers + `deleteFromR2`
+
+- `src/lib/db.ts` — `getImages({ limit, offset })`, `countImages()`,
+  `getImageById(id)`, `getPostsForImage(imageId)`, `updateImage(id,
+  metadata)`, `deleteImage(id)` (returns the deleted key).
+- `src/lib/r2.ts` — `deleteFromR2(key)` using `DeleteObjectCommand`.
+- Tests using in-memory db and the existing R2 mock pattern from
+  `upload.test.ts`.
+
+### 10.8 Image API endpoints
+
+- `GET /api/images` — paginated list, includes `usage_count` and public
+  URL per row.
+- `PATCH /api/images/[id]` — validates against `imageMetadataSchema`.
+- `DELETE /api/images/[id]` — when `usage_count > 0` and no
+  `?force=true`, return 409 with the list of referencing post slugs.
+  Otherwise delete R2 object then DB row.
+- `POST /api/images/[id]/replace` — multipart upload, reuses the Sharp
+  pipeline from `/api/upload`, writes back to the same R2 key, bumps
+  `uploaded_at`. Returns the unchanged URL.
+
+### 10.9 Image gallery UI at `/admin/images`
+
+- `src/lib/components/admin/ImagesTable.svelte` — thumbnail, key,
+  uploaded date, usage count, metadata preview, actions (Copy URL,
+  Edit, Replace, Delete).
+- Inline metadata edit expands a row with title/alt/caption/credit
+  inputs that PATCH the row.
+- Replace uses a hidden file input.
+- Delete confirm names the referencing posts; if usage > 0, the dialog
+  highlights "Replace instead" as the safer primary action.
+
+### 10.10 Cleanup + docs
+
+- Remove the accordion editor from `src/routes/admin/+page.svelte` (now
+  an unreachable redirect target). Delete the accordion-specific
+  component tests.
+- Update SPEC.md (admin section), README.md (API table + route map),
+  and append a NOTES.md entry on the same-key replace flow and browser
+  caching.
+
+### Checkpoint 10 (overall)
+
+- [x] `npm test` — full suite green (241 tests)
+- [x] `npm run check` — 0 errors
+- [ ] Manual end-to-end per the plan-file verification list
+
+---
+
+## Phase 11 — Inline Edit Affordances on Public Routes
+
+**Goal:** When a session is active, surface edit affordances inside the
+read view itself so single-clicking through to the admin route is no longer
+required for routine tweaks. The public chrome stays identical for
+unauthenticated readers.
+
+### Design
+
+- The per-post `<aside class="rail">` (already present in `FeedItem` and the
+  single-post page) gains an "Edit" button when `admin` is true. Clicking
+  swaps the rendered title + body block for an inline
+  `<PostForm mode="edit">` and supplies a Cancel that returns to the read
+  view. Each post owns its own draft via the form's existing `untrack`
+  capture — multiple posts can be in edit mode at once without conflict.
+- `PostForm` gains an optional `onCancel` prop (renders a Cancel button
+  beside Save when provided) and its `onSuccess` is enriched to pass the
+  parsed payload alongside the slug, so the host can update its local copy
+  without a refetch.
+- An `<ImageUploadModal>` component is reachable from inside `PostForm` via
+  an "Insert image" toolbar button under the body textarea. The modal
+  hits the existing `/api/upload` endpoint and on success splices
+  `![](url)` into the textarea at the caret position.
+- The site header rail gains a "+ New post" link (next to the existing
+  "Admin" link) that navigates to `/admin/posts/new`. A modal-based
+  composer is deliberately deferred.
+
+### Files
+
+- `src/lib/components/admin/PostForm.svelte` — added `onCancel`, enriched
+  `onSuccess`, body-toolbar Insert image button (placed *outside* the
+  Body `<label>` to keep its accessible name clean), modal mounting.
+- `src/lib/components/admin/ImageUploadModal.svelte` *(new)* — overlay
+  with file picker, calls `/api/upload`, invokes `onInsert(url)` on
+  success.
+- `src/lib/components/FeedItem.svelte` — new `admin` prop, local mutable
+  `post` state, rail Edit toggle, inline `PostForm` swap, `onSaved`
+  handler that maps the form's `tags: string[]` payload back to
+  `{ name, slug }` via `slugify`.
+- `src/routes/[year]/[month]/[day]/[slug]/+page.svelte` — same treatment
+  as `FeedItem` but rendered directly by the page (h1 sizing differs).
+- `src/routes/+page.svelte`, `src/routes/tag/[slug]/+page.svelte` — read
+  `admin` from `$app/state` and forward to `<FeedItem>`.
+- `src/routes/+layout.svelte` — added "+ New post" link.
+
+### Tests
+
+- `PostForm.svelte.test.ts` — Cancel renders only with callback;
+  onSuccess passes payload; Insert image opens modal and splices URL
+  into body at the cursor.
+- `ImageUploadModal.svelte.test.ts` *(new)* — picker + upload roundtrip;
+  failure surfaces error; Cancel closes.
+- `FeedItem.svelte.test.ts` *(new)* — admin=false hides Edit; admin=true
+  shows it; click swaps to form; Cancel reverts; Save updates the
+  rendered body.
+- `[year]/[month]/[day]/[slug]/page.svelte.test.ts` — same admin matrix
+  for the single-post page, with `$app/state` mocked.
+- `layout.svelte.test.ts` — "+ New post" link visibility tracks
+  `data.admin`.
+
+### Checkpoint 11
+
+- [x] `npm test` — 258 tests green
+- [x] `npm run check` — 0 errors / 0 warnings
+- [ ] Manual: sign in; from the feed, click Edit on a post → form
+      appears in place; toggle Insert image, upload a file, confirm the
+      markdown is spliced at the caret; Save and see the new body
+      rendered without navigation; Cancel and confirm the read view
+      returns intact; verify the same flow on a permalink page.
+
+### Phase 11.1 — Rail chrome adjustments
+
+**Goal:** Tighten the inline-edit affordance so the rail tells the
+truth about state. Three changes:
+
+1. In read mode, the rail's Edit button sits inline next to the
+   permalink dateline (no top-border divider); the tag list drops
+   to its own row below.
+2. In edit mode, the rail swaps its metadata cluster (dateline +
+   tags) for the form's controls — Save, Cancel, Insert image —
+   so the only visible affordances belong to the form.
+3. The admin posts table loses its trailing actions column; the
+   title link already routes to the edit page, and View + Delete
+   are reachable from there.
+
+**Design notes:**
+
+- `PostForm` gains `hideActions`, `formId`, and bindable
+  `imageModalOpen` / `submitting` / `saved` props. With
+  `hideActions` the form does not render its toolbar or actions
+  row; the host is expected to render external buttons. The
+  external submit button targets the form via the HTML
+  `form="<id>"` attribute, preserving native form-submission
+  semantics. The modal and busy/saved state remain owned by
+  `PostForm` but are exposed via `$bindable` so the rail's UI
+  can stay in sync.
+- `FeedItem` and `[year]/[month]/[day]/[slug]/+page.svelte` adopt
+  the same `.rail-head` / `.rail-actions` split.
+
+**Tests:**
+
+- `FeedItem.svelte.test.ts` — read mode: `.rail-head` contains
+  both the permalink-wrapped Dateline and the Edit button; tag
+  list is a sibling. Edit mode: rail has no Dateline, no tag
+  list, and three buttons (`[type=submit]`, `.cancel`,
+  `.insert-image`); the submit button's `form` attribute matches
+  the form's `id`. Insert image opens the modal.
+- `[year]/[month]/[day]/[slug]/page.svelte.test.ts` — mirrors
+  the FeedItem rail tests for the single-post page.
+- `PostsTable.svelte.test.ts` — explicitly asserts the absence of
+  the actions column / View link / Edit link / Delete button.
+
+### Checkpoint 11.1
+
+- [x] `npm test` — green for changed suites
+- [x] `npm run check` — 0 errors / 0 warnings
+- [x] Manual (Playwright): home feed in admin mode shows Edit
+      next to dateline; clicking Edit swaps the rail to
+      Save/Cancel/Insert image; the admin posts table has three
+      columns with no action affordances.
+
+---
+
+## Phase 12 — Inline New Post on the Feed
+
+**Goal:** Symmetric counterpart to Phase 11's per-post Edit. When admin,
+the home feed gains a "+ New post" toggle at the top; clicking reveals
+`<PostForm mode="create">` in an article-shaped slot above the first
+post; saving prepends the new post to the feed and closes the composer,
+no navigation. The single `PostForm` component is reused — no API or
+schema changes.
+
+### Design
+
+- `src/routes/+page.svelte` is the only host (tag pages skipped: a new
+  post may not match the active tag filter, which would be confusing).
+- Local mutable `feed` state seeded from `data.feed` via `untrack` so
+  re-renders that supply a new `data` prop don't clobber prepended
+  drafts.
+- After save, the new feed item's `date` uses `Date.now()` and its
+  `permalink` is derived via `$lib/slug`'s `permalink({ slug,
+  created_at })` — the same helper the server uses, so the value matches
+  what'll show on the next full page load (subject to the obvious
+  client-server clock skew on the date stamp, which is sub-second).
+- The composer renders inside an `<article class="post post--compose">`
+  with the same grid as ordinary posts; its `<aside class="rail">` is
+  empty (and `aria-hidden`) so the visual column lines up but no
+  metadata is implied for the unsaved post.
+- The header's "+ New post" link is unchanged — it still navigates to
+  `/admin/posts/new` from any page. The two affordances coexist; if it
+  proves redundant on the feed in practice, hide one via
+  `page.url.pathname` in a follow-up.
+
+### Tests
+
+`src/routes/page.svelte.test.ts` — admin matrix: toggle hidden when
+not authed; visible when authed; click reveals an inline form; Cancel
+collapses it; a successful POST prepends the new post and removes the
+composer.
+
+### Checkpoint 12
+
+- [x] `npm test` — 262 tests green
+- [x] `npm run check` — 0 errors / 0 warnings
+- [ ] Manual: sign in, on the home feed click "+ New post", compose a
+      titled post with a tag, Save, confirm the new post appears at
+      position 1 of the feed without navigation; cancel a different
+      composer mid-typing and confirm no leftover state remains.
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
