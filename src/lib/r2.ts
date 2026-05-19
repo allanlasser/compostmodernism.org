@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '$env/dynamic/private';
 
 export const r2 = new S3Client({
@@ -20,4 +20,8 @@ export async function uploadToR2(key: string, buffer: Buffer, mimeType: string):
 		})
 	);
 	return `${env.R2_PUBLIC_URL}/${key}`;
+}
+
+export async function deleteFromR2(key: string): Promise<void> {
+	await r2.send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: key }));
 }
