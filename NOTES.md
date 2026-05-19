@@ -5,6 +5,30 @@ entries go on top.
 
 ---
 
+## Keep `node:*` imports out of any module the client may import
+
+`src/lib/slug.ts` used to `import { createHash } from 'node:crypto'` for
+`hashSlug()`. That was fine while `slug.ts` was only imported by server
+code (db.ts, route loaders). Once Phase 11/12 made `slugify` and
+`permalink` reachable from a `.svelte` component (for client-side
+post-save updates and inline composing), Vite's client bundler tried to
+include the whole module — `node:crypto` got externalized — and the
+browser console showed:
+
+> Module "node:crypto" has been externalized for browser compatibility.
+> Cannot access "node:crypto.createHash" in client code.
+
+The fix is to split: any module that may be imported from a `.svelte`
+component must stay browser-safe. `hashSlug` now lives in `src/lib/hash.ts`
+(Node-only, imported only by `db.ts`); `src/lib/slug.ts` is pure JS that
+works in either environment.
+
+When importing helpers into a Svelte component, eyeball the source: if
+it has a top-level `node:*` import, it doesn't belong in client code
+without a split.
+
+---
+
 ## Ghost inodes: restart the dev server after wiping `posts.db`
 
 Any workflow that deletes `posts.db` while a long-running process has it open

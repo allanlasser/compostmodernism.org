@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, hashSlug, dateParts, permalink } from './slug';
+import { slugify, dateParts, permalink } from './slug';
+import { hashSlug } from './hash';
 
 describe('slugify', () => {
 	it('lowercases and hyphenates', () => {

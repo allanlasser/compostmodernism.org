@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 export function slugify(title: string): string {
 	return title
 		.toLowerCase()
@@ -7,10 +5,6 @@ export function slugify(title: string): string {
 		.replace(/[^\w\s-]/g, '')
 		.replace(/[\s_]+/g, '-')
 		.replace(/^-+|-+$/g, '');
-}
-
-export function hashSlug(timestamp: number): string {
-	return createHash('md5').update(String(timestamp)).digest('hex').slice(0, 8);
 }
 
 export interface DateParts {

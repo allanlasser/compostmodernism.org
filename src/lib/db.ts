@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { slugify, hashSlug } from './slug';
+import { slugify } from './slug';
+import { hashSlug } from './hash';
 import { migrate } from './migrate';
 
 // db.ts is shared between the SvelteKit server and CLI scripts (init-db, seed,
