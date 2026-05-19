@@ -4,7 +4,7 @@ vi.mock('$env/dynamic/private', () => ({
 	env: { ADMIN_PASSWORD: 'correct-horse', POST_SECRET: 'test-secret' }
 }));
 
-import { POST } from './+server';
+import { POST, DELETE } from './+server';
 
 function req(body: unknown): Request {
 	return new Request('http://localhost/api/session', {
@@ -23,11 +23,13 @@ interface CookieOptions {
 }
 
 let cookieSet: ReturnType<typeof vi.fn>;
-let cookies: { set: typeof cookieSet };
+let cookieDelete: ReturnType<typeof vi.fn>;
+let cookies: { set: typeof cookieSet; delete: typeof cookieDelete };
 
 beforeEach(() => {
 	cookieSet = vi.fn();
-	cookies = { set: cookieSet };
+	cookieDelete = vi.fn();
+	cookies = { set: cookieSet, delete: cookieDelete };
 });
 
 describe('POST /api/session', () => {
@@ -50,5 +52,13 @@ describe('POST /api/session', () => {
 				sameSite: 'strict'
 			})
 		);
+	});
+});
+
+describe('DELETE /api/session', () => {
+	it('200 and clears the session cookie', async () => {
+		const res = await DELETE({ cookies } as never);
+		expect(res.status).toBe(200);
+		expect(cookieDelete).toHaveBeenCalledWith('session', { path: '/' });
 	});
 });

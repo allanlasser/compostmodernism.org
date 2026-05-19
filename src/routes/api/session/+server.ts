@@ -27,3 +27,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	return json({ ok: true });
 };
+
+export const DELETE: RequestHandler = async ({ cookies }) => {
+	cookies.delete('session', { path: '/' });
+	return json({ ok: true });
+};
