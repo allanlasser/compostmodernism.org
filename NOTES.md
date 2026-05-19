@@ -29,6 +29,34 @@ without a split.
 
 ---
 
+## Image replace overwrites the same R2 key — beware browser/CDN caches
+
+`POST /api/images/[id]/replace` uploads new bytes to the **same** R2 key as
+the existing image. This is deliberate: the public URL is unchanged, so every
+post that already references the image in its markdown body keeps working
+without any rewrite. It's why the gallery's "Replace" action is the safe
+default when an image is referenced by posts.
+
+The tradeoff: browsers, intermediate caches, and any CDN in front of R2 may
+keep serving the **old** bytes for as long as the response was cached. R2's
+public bucket sets `ETag` from the object's MD5, so a conditional request
+will revalidate — but a fresh GET that hits a cached copy won't notice the
+swap.
+
+Practical implications:
+
+- After a replace, hard-refresh (Cmd-Shift-R) any page that displays the
+  image before deciding whether the new bytes look right.
+- If you ever put Cloudflare's CDN (or any caching layer) in front of R2,
+  purge the affected URL after a replace, or move to versioned keys
+  (`?v=<uploaded_at>`) so the URL changes on each replace.
+
+If you genuinely want a *different* URL, use Delete (with `?force=true` if
+the image is referenced) and re-upload via `POST /api/upload`, then update
+the referencing posts.
+
+---
+
 ## Ghost inodes: restart the dev server after wiping `posts.db`
 
 Any workflow that deletes `posts.db` while a long-running process has it open

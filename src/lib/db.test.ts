@@ -277,6 +277,27 @@ describe('getPosts', () => {
 		expect(post?.date).toBe(post?.created_at);
 		expect(post?.type).toBe('post');
 	});
+
+	it('honours offset for pagination', async () => {
+		for (let i = 0; i < 5; i++) {
+			db.insertPost({ body: `post ${i}` });
+			await new Promise((r) => setTimeout(r, 2));
+		}
+		// Newest first: post 4, 3, 2, 1, 0.
+		const page2 = db.getPosts({ limit: 2, offset: 2 });
+		expect(page2.map((p) => p.body)).toEqual(['post 2', 'post 1']);
+	});
+});
+
+describe('countPosts', () => {
+	it('returns 0 when there are no posts', () => {
+		expect(db.countPosts()).toBe(0);
+	});
+
+	it('returns the total number of posts regardless of limit', () => {
+		for (let i = 0; i < 12; i++) db.insertPost({ body: `p${i}` });
+		expect(db.countPosts()).toBe(12);
+	});
 });
 
 describe('getPostBySlug', () => {
@@ -372,5 +393,126 @@ describe('deletePost', () => {
 		db.deletePost(slug);
 		const tag = db.raw.prepare('SELECT slug FROM tags WHERE slug = ?').get('keepme');
 		expect(tag).toBeDefined();
+	});
+});
+
+describe('getImages / countImages', () => {
+	it('returns [] and 0 when there are no images', () => {
+		expect(db.getImages()).toEqual([]);
+		expect(db.countImages()).toBe(0);
+	});
+
+	it('returns images newest first with usage_count', async () => {
+		db.recordImage('images/2026/05/01/aaaaaaaa.webp');
+		await new Promise((r) => setTimeout(r, 2));
+		db.recordImage('images/2026/05/02/bbbbbbbb.webp');
+		await new Promise((r) => setTimeout(r, 2));
+		db.recordImage('images/2026/05/03/cccccccc.webp');
+
+		// Wire one image into a post via the body so post_images gets populated.
+		db.insertPost({
+			body: 'see ![](https://images.test/images/2026/05/02/bbbbbbbb.webp) here'
+		});
+
+		const rows = db.getImages();
+		expect(rows.map((r) => r.key)).toEqual([
+			'images/2026/05/03/cccccccc.webp',
+			'images/2026/05/02/bbbbbbbb.webp',
+			'images/2026/05/01/aaaaaaaa.webp'
+		]);
+		const middle = rows.find((r) => r.key === 'images/2026/05/02/bbbbbbbb.webp');
+		expect(middle?.usage_count).toBe(1);
+		const top = rows.find((r) => r.key === 'images/2026/05/03/cccccccc.webp');
+		expect(top?.usage_count).toBe(0);
+		expect(db.countImages()).toBe(3);
+	});
+
+	it('honours limit and offset', async () => {
+		for (let i = 0; i < 5; i++) {
+			db.recordImage(`images/2026/05/0${i}/${String.fromCharCode(97 + i).repeat(8)}.webp`);
+			await new Promise((r) => setTimeout(r, 2));
+		}
+		const page2 = db.getImages({ limit: 2, offset: 2 });
+		expect(page2).toHaveLength(2);
+	});
+});
+
+describe('getImageById / getPostsForImage', () => {
+	it('getImageById returns the row or null', () => {
+		const r = db.recordImage('images/2026/05/13/abc.webp');
+		expect(db.getImageById(r.id)?.key).toBe(r.key);
+		expect(db.getImageById(99999)).toBeNull();
+	});
+
+	it('getPostsForImage returns posts that reference the key in their body', () => {
+		const img = db.recordImage('images/2026/05/13/used.webp');
+		db.insertPost({ body: 'no images here', title: 'Lonely' });
+		db.insertPost({
+			body: 'has ![](https://images.test/images/2026/05/13/used.webp) image',
+			title: 'Pictured'
+		});
+		const posts = db.getPostsForImage(img.id);
+		expect(posts.map((p) => p.title)).toEqual(['Pictured']);
+	});
+});
+
+describe('updateImage', () => {
+	it('updates only provided fields, leaves others alone', () => {
+		const img = db.recordImage('images/2026/05/13/abc.webp');
+		db.updateImage(img.id, { alt: 'a description' });
+		const after = db.getImageById(img.id);
+		expect(after?.alt).toBe('a description');
+		expect(after?.title).toBeNull();
+	});
+
+	it('explicit null clears a field', () => {
+		const img = db.recordImage('images/2026/05/13/abc.webp');
+		db.updateImage(img.id, { alt: 'first' });
+		db.updateImage(img.id, { alt: null });
+		expect(db.getImageById(img.id)?.alt).toBeNull();
+	});
+
+	it('no-op when no fields are provided', () => {
+		const img = db.recordImage('images/2026/05/13/abc.webp');
+		expect(() => db.updateImage(img.id, {})).not.toThrow();
+	});
+});
+
+describe('touchImage', () => {
+	it('bumps uploaded_at to the current time', async () => {
+		const r = db.recordImage('images/2026/05/13/abc.webp');
+		const before = r.uploaded_at;
+		await new Promise((res) => setTimeout(res, 5));
+		db.touchImage(r.id);
+		const after = db.getImageById(r.id);
+		expect(after?.uploaded_at).toBeGreaterThan(before);
+	});
+
+	it('is a no-op when the id does not exist', () => {
+		expect(() => db.touchImage(99999)).not.toThrow();
+	});
+});
+
+describe('deleteImage', () => {
+	it('removes the row and returns the deleted key', () => {
+		const img = db.recordImage('images/2026/05/13/abc.webp');
+		const result = db.deleteImage(img.id);
+		expect(result?.key).toBe(img.key);
+		expect(db.getImageById(img.id)).toBeNull();
+	});
+
+	it('returns null when the id does not exist', () => {
+		expect(db.deleteImage(99999)).toBeNull();
+	});
+
+	it('cascade-clears post_images rows', () => {
+		const img = db.recordImage('images/2026/05/13/used.webp');
+		db.insertPost({
+			body: 'pic ![](https://images.test/images/2026/05/13/used.webp)',
+			title: 'Pic'
+		});
+		expect(db.raw.prepare('SELECT COUNT(*) AS n FROM post_images').get()).toMatchObject({ n: 1 });
+		db.deleteImage(img.id);
+		expect(db.raw.prepare('SELECT COUNT(*) AS n FROM post_images').get()).toMatchObject({ n: 0 });
 	});
 });

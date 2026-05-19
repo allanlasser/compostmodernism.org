@@ -61,6 +61,17 @@ export interface ImageRow {
 	credit: string | null;
 }
 
+export interface ImageWithUsage extends ImageRow {
+	usage_count: number;
+}
+
+export interface ImageMetadataUpdate {
+	title?: string | null;
+	alt?: string | null;
+	caption?: string | null;
+	credit?: string | null;
+}
+
 export function createDb(path: string) {
 	const raw = new Database(path);
 	if (path !== ':memory:') raw.pragma('journal_mode = WAL');
@@ -115,6 +126,69 @@ export function createDb(path: string) {
 		return raw.prepare('SELECT * FROM images WHERE key = ?').get(key) as ImageRow;
 	}
 
+	function getImages({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): ImageWithUsage[] {
+		return raw
+			.prepare(
+				`SELECT i.*, COALESCE(u.n, 0) AS usage_count
+				 FROM images i
+				 LEFT JOIN (
+				   SELECT image_id, COUNT(*) AS n FROM post_images GROUP BY image_id
+				 ) u ON u.image_id = i.id
+				 ORDER BY i.uploaded_at DESC, i.id DESC
+				 LIMIT ? OFFSET ?`
+			)
+			.all(limit, offset) as ImageWithUsage[];
+	}
+
+	function countImages(): number {
+		const row = raw.prepare('SELECT COUNT(*) AS n FROM images').get() as { n: number };
+		return row.n;
+	}
+
+	function getImageById(id: number): ImageRow | null {
+		const row = raw.prepare('SELECT * FROM images WHERE id = ?').get(id) as ImageRow | undefined;
+		return row ?? null;
+	}
+
+	function getPostsForImage(imageId: number): { slug: string; title: string | null }[] {
+		return raw
+			.prepare(
+				`SELECT p.slug, p.title
+				 FROM posts p
+				 JOIN post_images pi ON pi.post_id = p.id
+				 WHERE pi.image_id = ?
+				 ORDER BY p.created_at DESC, p.id DESC`
+			)
+			.all(imageId) as { slug: string; title: string | null }[];
+	}
+
+	function updateImage(id: number, metadata: ImageMetadataUpdate): void {
+		const fields: string[] = [];
+		const values: unknown[] = [];
+		for (const key of ['title', 'alt', 'caption', 'credit'] as const) {
+			if (metadata[key] !== undefined) {
+				fields.push(`${key} = ?`);
+				values.push(metadata[key]);
+			}
+		}
+		if (!fields.length) return;
+		values.push(id);
+		raw.prepare(`UPDATE images SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+	}
+
+	function touchImage(id: number): void {
+		raw.prepare('UPDATE images SET uploaded_at = ? WHERE id = ?').run(Date.now(), id);
+	}
+
+	function deleteImage(id: number): { key: string } | null {
+		const row = raw.prepare('SELECT key FROM images WHERE id = ?').get(id) as
+			| { key: string }
+			| undefined;
+		if (!row) return null;
+		raw.prepare('DELETE FROM images WHERE id = ?').run(id);
+		return { key: row.key };
+	}
+
 	function extractImageKeys(body: string): Set<string> {
 		const base = process.env.R2_PUBLIC_URL;
 		const keys = new Set<string>();
@@ -156,11 +230,16 @@ export function createDb(path: string) {
 		return { id, slug };
 	}
 
-	function getPosts({ limit = 50 }: { limit?: number } = {}): Post[] {
+	function getPosts({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): Post[] {
 		const rows = raw
-			.prepare('SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT ?')
-			.all(limit) as PostRow[];
+			.prepare('SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+			.all(limit, offset) as PostRow[];
 		return rows.map(hydrate);
+	}
+
+	function countPosts(): number {
+		const row = raw.prepare('SELECT COUNT(*) AS n FROM posts').get() as { n: number };
+		return row.n;
 	}
 
 	function getPostBySlug(slug: string): Post | null {
@@ -222,12 +301,20 @@ export function createDb(path: string) {
 		raw,
 		insertPost,
 		getPosts,
+		countPosts,
 		getPostBySlug,
 		getPostsByTag,
 		getAllTags,
 		updatePost,
 		deletePost,
 		recordImage,
+		getImages,
+		countImages,
+		getImageById,
+		getPostsForImage,
+		updateImage,
+		touchImage,
+		deleteImage,
 		setPostImages
 	};
 }
@@ -242,6 +329,7 @@ function defaultDb(): Db {
 
 export const insertPost: Db['insertPost'] = (input) => defaultDb().insertPost(input);
 export const getPosts: Db['getPosts'] = (opts) => defaultDb().getPosts(opts);
+export const countPosts: Db['countPosts'] = () => defaultDb().countPosts();
 export const getPostBySlug: Db['getPostBySlug'] = (slug) => defaultDb().getPostBySlug(slug);
 export const getPostsByTag: Db['getPostsByTag'] = (slug, opts) =>
 	defaultDb().getPostsByTag(slug, opts);
@@ -250,5 +338,13 @@ export const updatePost: Db['updatePost'] = (slug, update) =>
 	defaultDb().updatePost(slug, update);
 export const deletePost: Db['deletePost'] = (slug) => defaultDb().deletePost(slug);
 export const recordImage: Db['recordImage'] = (key) => defaultDb().recordImage(key);
+export const getImages: Db['getImages'] = (opts) => defaultDb().getImages(opts);
+export const countImages: Db['countImages'] = () => defaultDb().countImages();
+export const getImageById: Db['getImageById'] = (id) => defaultDb().getImageById(id);
+export const getPostsForImage: Db['getPostsForImage'] = (id) => defaultDb().getPostsForImage(id);
+export const updateImage: Db['updateImage'] = (id, metadata) =>
+	defaultDb().updateImage(id, metadata);
+export const touchImage: Db['touchImage'] = (id) => defaultDb().touchImage(id);
+export const deleteImage: Db['deleteImage'] = (id) => defaultDb().deleteImage(id);
 export const setPostImages: Db['setPostImages'] = (postId, body) =>
 	defaultDb().setPostImages(postId, body);
