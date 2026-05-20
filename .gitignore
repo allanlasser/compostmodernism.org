@@ -33,6 +33,9 @@ posts.db-shm
 posts.db-wal
 coverage/
 
+# Local backups — markdown export of all posts, persisted via bind mount
+archive/
+
 # Claude Code local state
 .claude/
 .playwright-mcp/

@@ -10,6 +10,7 @@ services:
       BODY_SIZE_LIMIT: 20971520
     volumes:
       - ./posts.db:/app/posts.db
+      - ./archive:/app/archive
     networks:
       - web
 
