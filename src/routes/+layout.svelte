@@ -65,6 +65,12 @@
     text-decoration: underline;
   }
 
+  a.site-title:hover {
+    text-decoration-color: var(--color-ink-soft);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
 	.site-title {
 		font-family: var(--font-display);
 		font-style: italic;
@@ -101,6 +107,9 @@
   .admin-links a,
 	.byline a {
 		text-decoration: none;
+    &:hover {
+      color: var(--color-ink);
+    }
 	}
 
 	.site-main {

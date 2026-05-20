@@ -36,5 +36,6 @@
 
 	.tags a:hover {
 		text-decoration: underline;
+    color: var(--color-ink);
 	}
 </style>

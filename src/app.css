@@ -40,7 +40,7 @@
 	--font-display: 'Gentium Plus', 'Gentium Basic', Georgia, serif;
 
 	--size-body: 16px;
-	--size-lede: 19px;
+	--size-lede: 20px;
 	--size-meta: 14px;
 	--size-title: 24px;
 
@@ -96,7 +96,7 @@ html {
 
 a {
 	color: inherit;
-	text-decoration-skip-ink: none;
+	text-decoration-skip-ink: auto;
 }
 
 p {

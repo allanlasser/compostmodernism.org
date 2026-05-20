@@ -154,8 +154,14 @@
 	}
 
 	.body :global(a) {
-		color: inherit;
+		color: var(--color-ink-soft);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
 	}
+
+  .body :global(a:hover) {
+    color: var(--color-ink);
+  }
 
 	.body :global(strong) {
 		font-weight: 600;
@@ -178,6 +184,7 @@
 
 	.post--titled h2,
   .post--link h2 {
+    font-family: var(--font-display);
     font-style: italic;
 		font-size: var(--size-lede);
 		line-height: 1.4;
@@ -189,6 +196,9 @@
 
 	.post--link h2 a:hover {
 		text-decoration: underline;
+    text-decoration-color: var(--color-ink-soft);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
 	}
 
 	.post--link .link-marker {
@@ -207,6 +217,7 @@
 		color: var(--color-ink-soft);
     text-decoration: none;
     &:hover {
+      color: var(--color-ink);
 		  text-decoration: underline;
     }
   }

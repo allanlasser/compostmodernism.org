@@ -27,6 +27,5 @@
 <style>
 	time {
 		font-size: var(--size-meta);
-		color: var(--color-ink-soft);
 	}
 </style>
