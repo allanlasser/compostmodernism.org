@@ -1059,9 +1059,10 @@ The runtime stage copies `node_modules/`, `build/`, `migrations/`,
 `scripts/`, `src/`, plus `package.json` and `tsconfig.json` — no
 toolchain ships.
 
-The build runs on the VPS during `docker compose up -d --build`. CI's
+The build runs on the VPS during `docker-compose up -d --build`. CI's
 build job is a gate (it verifies the build + tests pass before SSH'ing
-to the VPS), not a packaging step.
+to the VPS), not a packaging step. The VPS uses Docker Compose v1
+(hyphenated `docker-compose`); see NOTES.md.
 
 ```dockerfile
 FROM node:20-alpine AS builder
@@ -1089,9 +1090,10 @@ CMD ["node", "build/index.js"]
 `COPY migrations/` is required — the server runs `migrate()` on startup
 and the runner throws if the directory is absent. New migrations apply
 in this order: push code → CI build job passes → SSH into VPS →
-`git pull && docker compose up -d --build` → server boot calls
-`createDb()` → `migrate()` finds files past `user_version` and applies
-them inside transactions before the first request lands.
+`git pull && docker-compose up -d --build` (via `scripts/deploy.sh`) →
+server boot calls `createDb()` → `migrate()` finds files past
+`user_version` and applies them inside transactions before the first
+request lands.
 
 `src/` ships into the runtime image because the standalone scripts
 (`init-db.ts`, `export-and-backup.ts`) import `../src/lib/db.ts` via
@@ -1124,7 +1126,7 @@ networks:
 ```
 
 The `web` network is owned by the gateway (`~/gateway/docker-compose.yml`).
-This compose file just joins it. If `docker compose up` errors with
+This compose file just joins it. If `docker-compose up` errors with
 "network web not found", start the gateway first.
 
 ### `.env.example`
@@ -1154,15 +1156,16 @@ openssl rand -hex 16   # ADMIN_PASSWORD (or use a memorable passphrase)
 
 ```bash
 # First run — touch posts.db so the bind-mount creates a file (not a dir),
-# then initialise the schema. The server's own createDb() would also do this
-# on first request, but explicit setup makes the bootstrap legible.
+# then start the container. The server's own createDb() applies pending
+# migrations on first request. An explicit `npx tsx scripts/init-db.ts`
+# is available as a CLI convenience if you want to seed the DB before
+# the first request lands.
 touch posts.db
-docker compose run --rm app npx tsx scripts/init-db.ts
-docker compose up -d
+docker-compose up -d
 
-# Subsequent deploys (done via SSH in GitHub Actions) — migrations apply on
-# container start, no separate step required.
-docker compose up -d --build
+# Subsequent deploys (done via SSH in GitHub Actions, see scripts/deploy.sh) —
+# migrations apply on container start, no separate step required.
+docker-compose up -d --build
 
 # Run the nightly export manually
 docker exec compostmodernism npx tsx scripts/export-and-backup.ts
@@ -1221,12 +1224,30 @@ picks up the new file automatically.
 ## 11. GitHub Actions Deployment
 
 Two jobs: **build** verifies a clean checkout type-checks, tests, and
-builds; **deploy** SSHes to the VPS and triggers `git pull` +
-`docker compose up -d --build`. The VPS holds the canonical source via
-a long-lived git checkout under `~/sites/compostmodernism.org`.
+builds; **deploy** opens a plain SSH session to the VPS and pipes
+`scripts/deploy.sh` over stdin to `bash -s`. The script does
+`git pull` and `docker-compose up -d --build`. The VPS holds the
+canonical source via a long-lived git checkout under
+`~/sites/compostmodernism.org`. Trigger branch is `main`.
 
-The trigger branch is `blog-engine` during initial bring-up; switch to
-`main` once the deploy mechanics are proven.
+The deploy job uses plain `ssh` rather than a third-party action so the
+deploy logic lives in a versioned, reviewable script file alongside the
+rest of the repo, not inline in YAML. Piping the script over stdin (as
+opposed to running the VPS-local copy) means a script change takes
+effect on the same deploy that introduces it, not the next one.
+
+### `scripts/deploy.sh`
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd ~/sites/compostmodernism.org
+git fetch origin
+git checkout main
+git pull --ff-only
+docker-compose up -d --build
+```
 
 ### `.github/workflows/deploy.yml`
 
@@ -1235,7 +1256,7 @@ name: Deploy
 
 on:
   push:
-    branches: [blog-engine]
+    branches: [main]
 
 jobs:
   build:
@@ -1257,18 +1278,18 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -euo pipefail
-            cd ~/sites/compostmodernism.org
-            git fetch origin
-            git checkout blog-engine
-            git pull --ff-only
-            docker compose up -d --build
+      - uses: actions/checkout@v4
+      - name: Run deploy script over SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" 'bash -s' < scripts/deploy.sh
 ```
 
 ### Required GitHub Secrets
@@ -1288,7 +1309,7 @@ no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA
 
 These options block the key from being repurposed for tunneling or
 shell sessions if the GHA secret ever leaks — it can still execute the
-`script:` block, which is all `appleboy/ssh-action` needs.
+piped `scripts/deploy.sh`, which is all the deploy job needs.
 
 ---
 
@@ -1480,9 +1501,6 @@ cd ~/sites
 git clone https://github.com/YOUR_USERNAME/compostmodernism.org.git
 cd compostmodernism.org
 
-# Track the deploy branch
-git checkout blog-engine
-
 # Create .env from template and fill in all values
 cp .env.example .env
 nano .env
@@ -1496,16 +1514,13 @@ cd ~/sites/compostmodernism.org
 # Touch posts.db so the bind-mount creates a file (not a directory)
 touch posts.db
 
-# Initialise the database (applies all current migrations)
-docker compose run --rm app npx tsx scripts/init-db.ts
-
-# Start the container — future migrations apply automatically on restart
-docker compose up -d
+# Start the container — createDb() applies pending migrations on boot
+docker-compose up -d
 ```
 
-After this, pushes to the deploy branch are picked up by GitHub Actions,
-which SSHes in and runs `git pull && docker compose up -d --build` — no
-further manual steps required.
+After this, pushes to `main` are picked up by GitHub Actions, which
+opens an SSH session to the VPS and pipes `scripts/deploy.sh` over
+stdin — no further manual steps required.
 
 **Cron for nightly export** (on the VPS host, not inside a container):
 

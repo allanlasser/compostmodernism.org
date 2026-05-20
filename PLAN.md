@@ -428,8 +428,10 @@ No automated tests for infra config — verified by inspection and smoke test.
    `request_body max_size 20MB`. Mounted into the gateway as
    `compostmodernism.org.caddy`.
 4. Write `.github/workflows/deploy.yml` per SPEC §11 — two jobs (build
-   gate + ssh-action that runs `git pull && docker compose up -d --build`).
-   Trigger is `blog-engine` during bring-up; flip to `main` once stable.
+   gate + a deploy job that opens an SSH session to the VPS and pipes
+   `scripts/deploy.sh` over stdin). Trigger is `main`. (Earlier drafts
+   used a `blog-engine` bring-up branch and `appleboy/ssh-action`; both
+   were dropped before first deploy — see commit history.)
 5. Promote `tsx` from devDeps → deps so production scripts
    (`init-db.ts`, `export-and-backup.ts`) run under `npx tsx` in the
    container. Resolves the deferred Phase 3 follow-up.
@@ -442,10 +444,8 @@ No automated tests for infra config — verified by inspection and smoke test.
       applies `001_init.sql`, `PRAGMA user_version` becomes 1
 - [ ] Adding a new migration and redeploying — file applies on next
       boot, version bumps, no manual step required
-- [ ] Push to `blog-engine` — GitHub Actions deploys successfully to VPS
+- [ ] Push to `main` — GitHub Actions deploys successfully to VPS
 - [ ] `https://compostmodernism.org` loads over TLS
-- [ ] Cut over: flip workflow trigger from `blog-engine` to `main` once
-      the deploy mechanics are proven; merge `blog-engine` → `main`
 
 ---
 

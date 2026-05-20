@@ -24,7 +24,7 @@ This file is the architectural overview — what the running app actually is.
 | Tests | `vitest` + `@testing-library/svelte` + `happy-dom`, 150+ tests across the codebase |
 | Container | Docker + Docker Compose (no host ports — joins external `web` network) |
 | TLS / routing | Caddy, running in a separate gateway container; this repo only ships a `Caddyfile` that the gateway mounts |
-| CI/CD | GitHub Actions: build + test, then SSH `git pull && docker compose up -d --build` |
+| CI/CD | GitHub Actions: build + test gate, then plain `ssh` runs `scripts/deploy.sh` on the VPS |
 
 ## Repository layout
 
@@ -65,7 +65,7 @@ This file is the architectural overview — what the running app actually is.
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
 ├── Caddyfile                     # reverse_proxy compostmodernism:3000 — mounted into the gateway
-├── .github/workflows/deploy.yml  # Build/test gate → SSH deploy on push to blog-engine
+├── .github/workflows/deploy.yml  # Build/test gate → SSH deploy on push to main
 ├── DEPLOY.md                     # One-time bootstrap checklist for cornhill
 ├── PLAN.md                       # Phase-by-phase TDD plan
 └── SPEC.md                       # Design spec
@@ -164,10 +164,12 @@ A `posts.db` file appears in the repo root on first run; it's gitignored.
 
 ## Deployment
 
-CI/CD: pushing to `blog-engine` runs `.github/workflows/deploy.yml`, which gates on
-`npm run check && npm test && npm run build` and then SSHes to the VPS to
-`git pull && docker compose up -d --build`. After bring-up stabilizes, the trigger
-will move to `main`.
+CI/CD: pushing to `main` runs `.github/workflows/deploy.yml`, which gates on
+`npm run check && npm test && npm run build` and then opens an SSH session to the
+VPS that pipes `scripts/deploy.sh` over stdin. The script does `git pull` and
+`docker-compose up -d --build` — migrations apply on the next `createDb()` call
+during container boot. The VPS uses Docker Compose v1 (`docker-compose`,
+hyphenated); see NOTES.md for the install-time gotcha.
 
 Caddy is **not** part of this project's compose stack. It runs in a separate
 `~/gateway/` stack on the VPS; this repo's `Caddyfile` is bind-mounted into that

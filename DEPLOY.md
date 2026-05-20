@@ -1,8 +1,7 @@
 # First-Deploy Action Items
 
-Bootstrap checklist for the initial deploy of `blog-engine` to cornhill.
-Once everything green, this file can be archived or left as historical
-context.
+Bootstrap checklist for the initial deploy to cornhill. Once everything
+is green, this file can be archived or left as historical context.
 
 ---
 
@@ -50,7 +49,7 @@ Repo settings → Secrets and variables → Actions → New repository secret.
 ```bash
 ssh cornhill
 cd ~/sites/compostmodernism.org
-git fetch origin && git checkout blog-engine && git pull
+git fetch origin && git checkout main && git pull
 cp .env.example .env
 nano .env
 ```
@@ -84,15 +83,18 @@ If using Cloudflare's proxy (orange cloud), set SSL mode to
 ```bash
 cd ~/sites/compostmodernism.org
 touch posts.db
-docker compose run --rm app npx tsx scripts/init-db.ts
-docker compose up -d
+docker-compose up -d
 ```
+
+The first `createDb()` call inside the running container applies all
+pending migrations. `scripts/init-db.ts` is available for explicit CLI
+seeding but isn't required.
 
 ## 8. First real deploy
 
-Push `blog-engine` to GitHub. The Actions workflow runs build + test
-+ deploy. Watch the Actions tab for failures; SSH logs surface at the
-"SSH + git pull + docker compose up" step.
+Push `main` to GitHub. The Actions workflow runs build + test + deploy.
+Watch the Actions tab for failures; SSH logs surface at the "Run deploy
+script over SSH" step.
 
 ## 9. Smoke test
 
@@ -106,9 +108,6 @@ Push `blog-engine` to GitHub. The Actions workflow runs build + test
 
 ## After everything works
 
-- Flip GHA trigger from `blog-engine` to `main`
-  (`.github/workflows/deploy.yml:5`).
-- Merge `blog-engine` → `main`.
 - Add the nightly cron on cornhill:
   ```
   0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1

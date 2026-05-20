@@ -5,6 +5,29 @@ entries go on top.
 
 ---
 
+## VPS is on Docker Compose v1, not v2
+
+On the deploy host (cornhill, Ubuntu 18.04), the only working invocation
+is the hyphenated `docker-compose` (Python v1, 1.x). The modern
+`docker compose` subcommand is unavailable because the host's Docker
+Engine is 18.09 — older than the plugin discovery mechanism (introduced
+in Docker 20.10, October 2020). Installing `docker-compose-plugin` via
+apt lays down `/usr/libexec/docker/cli-plugins/docker-compose`, but the
+ancient docker CLI doesn't know to scan that directory, so
+`docker compose version` still fails with "compose is not a docker
+command."
+
+What we ship: `scripts/deploy.sh` and DEPLOY.md call `docker-compose`
+(hyphenated). The v1 binary is good enough for this project's compose
+file (no v2-only features used) and stays out of the way until we have a
+maintenance window to upgrade Docker Engine. Compose v2 supports Docker
+Engine 18.06+ so upgrading the daemon would unlock the modern CLI; the
+reason not to do it during first-deploy is that it restarts every
+container managed by the daemon (including unrelated sites behind the
+shared gateway).
+
+---
+
 ## Vitest 4 + Vite 8 upgrade: three things that bit us
 
 When taking the May 2026 upgrade (`vite 5 → 8`, `vitest 1 → 4`,
