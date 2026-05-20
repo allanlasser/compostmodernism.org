@@ -5,12 +5,36 @@
 }
 
 :root {
+	color-scheme: light dark;
+
 	--bg-hue: 0deg;
 	--color-bg: hsl(var(--bg-hue) 100% 94%);
 	--color-ink: rgb(38 29 26 / 0.8);
 	--color-ink-soft: rgb(38 29 26 / 0.6);
   --color-ink-dim: rgb(38 29 26 / 0.4);
   --color-border: rgb(38 29 26 / 0.2);
+
+	--color-surface-subtle: rgb(38 29 26 / 0.06);
+	--color-scrim: rgb(38 29 26 / 0.35);
+	--color-danger: rgb(161 60 31);
+	--color-danger-bg: rgb(161 60 31 / 0.15);
+	--color-field: rgb(255 255 255 / 0.5);
+	--color-field-focus: rgb(255 255 255);
+
+	@media (prefers-color-scheme: dark) {
+		--color-bg: hsl(var(--bg-hue) 30% 12%);
+		--color-ink: rgb(245 236 229 / 0.85);
+		--color-ink-soft: rgb(245 236 229 / 0.6);
+		--color-ink-dim: rgb(245 236 229 / 0.4);
+		--color-border: rgb(245 236 229 / 0.2);
+
+		--color-surface-subtle: rgb(245 236 229 / 0.06);
+		--color-scrim: rgb(8 4 2 / 0.6);
+		--color-danger: rgb(224 97 58);
+		--color-danger-bg: rgb(224 97 58 / 0.18);
+		--color-field: rgb(245 236 229 / 0.06);
+		--color-field-focus: rgb(245 236 229 / 0.12);
+	}
 
 	--font-serif: 'Gentium Book Plus', 'Gentium Book Basic', Georgia, serif;
 	--font-display: 'Gentium Plus', 'Gentium Basic', Georgia, serif;

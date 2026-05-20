@@ -68,7 +68,7 @@
 		text-align: left;
 		padding: var(--space-stack) 0.5em;
 		vertical-align: top;
-		border-bottom: 1px solid rgb(79 36 19 / 0.12);
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.posts-table thead th {
@@ -110,7 +110,7 @@
 	}
 
 	.muted {
-		color: rgb(79 36 19 / 0.4);
+		color: var(--color-ink-dim);
 	}
 
 	.empty {

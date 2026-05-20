@@ -12,7 +12,7 @@
 		justify-content: space-between;
 		gap: var(--space-stack);
 		padding-bottom: var(--space-stack);
-		border-bottom: 1px solid rgb(79 36 19 / 0.15);
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.admin-nav ul {

@@ -78,7 +78,7 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgb(79 36 19 / 0.35);
+		background: var(--color-scrim);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -88,7 +88,7 @@
 
 	.modal {
 		background: var(--color-bg);
-		border: 1px solid rgb(79 36 19 / 0.2);
+		border: 1px solid var(--color-border);
 		max-width: 420px;
 		width: 100%;
 		padding: var(--space-section);
@@ -143,7 +143,7 @@
 	}
 
 	.error {
-		color: #a13c1f;
+		color: var(--color-danger);
 		font-size: var(--size-meta);
 	}
 

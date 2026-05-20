@@ -247,11 +247,11 @@
 	.post-form button {
 		font: inherit;
 		padding: 0.4em 0.6em;
-    background: rgb(255 255 255 / 0.5);
+    background: var(--color-field);
     border: 1px solid var(--color-border);
     border-radius: 4px;
     &:focus, &:hover {
-      background: rgb(255 255 255);
+      background: var(--color-field-focus);
     }
 	}
 
@@ -271,7 +271,7 @@
 
 	.field-error,
 	.form-error {
-		color: #a13c1f;
+		color: var(--color-danger);
 		font-size: var(--size-meta);
 	}
 
@@ -313,9 +313,9 @@
 		border: 0;
 		padding: 0.25em 0.5em;
 		cursor: pointer;
-		color: #a13c1f;
+		color: var(--color-danger);
     &:hover {
-      background: #d5431b28;
+      background: var(--color-danger-bg);
     }
 	}
 

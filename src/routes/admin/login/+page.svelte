@@ -70,7 +70,7 @@
 	}
 
 	.error {
-		color: #a13c1f;
+		color: var(--color-danger);
 		font-size: var(--size-meta);
 	}
 </style>

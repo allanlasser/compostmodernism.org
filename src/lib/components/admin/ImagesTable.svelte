@@ -236,7 +236,7 @@
 		text-align: left;
 		padding: var(--space-stack) 0.5em;
 		vertical-align: top;
-		border-bottom: 1px solid rgb(79 36 19 / 0.12);
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.images-table thead th {
@@ -250,7 +250,7 @@
 		width: 96px;
 		height: 96px;
 		object-fit: cover;
-		background: rgb(79 36 19 / 0.06);
+		background: var(--color-surface-subtle);
 	}
 
 	.key {
@@ -318,7 +318,7 @@
 	}
 
 	.actions-cell .link.delete {
-		color: #a13c1f;
+		color: var(--color-danger);
 	}
 
 	.actions-cell .link:hover:not(:disabled) {
@@ -330,7 +330,7 @@
 	}
 
 	.muted {
-		color: rgb(79 36 19 / 0.4);
+		color: var(--color-ink-dim);
 	}
 
 	.empty {

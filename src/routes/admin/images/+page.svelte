@@ -85,7 +85,7 @@
 	}
 
 	.error {
-		color: #a13c1f;
+		color: var(--color-danger);
 		font-size: var(--size-meta);
 	}
 
@@ -114,7 +114,7 @@
 	}
 
 	.muted {
-		color: rgb(79 36 19 / 0.4);
+		color: var(--color-ink-dim);
 		font-size: var(--size-meta);
 	}
 </style>
