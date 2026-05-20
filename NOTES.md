@@ -5,6 +5,34 @@ entries go on top.
 
 ---
 
+## Slug redirects point to `post_id`, not to a path string
+
+`slug_redirects` rows store `(old_year, old_month, old_day, old_slug, post_id)`
+and the route loader resolves the *current* canonical URL by joining through to
+`posts` and calling `permalink(post)`. This is deliberate, and there's a
+tempting wrong alternative worth being explicit about.
+
+The wrong alternative is to store a destination path string (e.g.
+`new_path: '/2026/05/19/greetings'`). It seems simpler — the loader can just
+return the stored string — but it makes successive renames painful:
+`foo → bar → baz` requires either walking the chain at request time (with a
+loop guard for cycles) or running an UPDATE across every prior ledger row
+each time you rename. Both are extra moving parts that can drift.
+
+Pointing at `post_id` makes the chain collapse automatically: every redirect
+through any old slug resolves to the post's *current* path via a single JOIN.
+Cycles are impossible by construction (you can't follow a chain that doesn't
+exist).
+
+The trade is one extra JOIN per redirect lookup — cheap, and only on the 404
+path. The lookup is indexed on the full tuple, so misses (the common case for
+real 404s) are also cheap.
+
+If you ever consider switching to path-string storage, re-read this and the
+"chains" section of PLAN.md §Phase 13 first.
+
+---
+
 ## Keep `node:*` imports out of any module the client may import
 
 `src/lib/slug.ts` used to `import { createHash } from 'node:crypto'` for

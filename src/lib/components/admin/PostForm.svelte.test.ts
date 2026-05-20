@@ -144,7 +144,7 @@ describe('PostForm', () => {
 	});
 
 	it('pre-fills inputs from initial values', () => {
-		const { container } = render(PostForm, {
+		const { container, getByLabelText } = render(PostForm, {
 			props: {
 				mode: 'edit',
 				initial: {
@@ -156,11 +156,78 @@ describe('PostForm', () => {
 				}
 			}
 		});
-		const inputs = container.querySelectorAll('input');
-		expect((inputs[0] as HTMLInputElement).value).toBe('T');
-		expect((inputs[1] as HTMLInputElement).value).toBe('https://x');
-		expect((inputs[2] as HTMLInputElement).value).toBe('a, b');
+		expect((getByLabelText(/^Title/) as HTMLInputElement).value).toBe('T');
+		expect((getByLabelText(/^URL/) as HTMLInputElement).value).toBe('https://x');
+		expect((getByLabelText(/^Tags/) as HTMLInputElement).value).toBe('a, b');
 		expect((container.querySelector('textarea') as HTMLTextAreaElement).value).toBe('b');
+	});
+
+	describe('slug input (Phase 13)', () => {
+		function slugInput(container: HTMLElement): HTMLInputElement | null {
+			return container.querySelector('input[name="slug"]');
+		}
+
+		it('create mode → no slug input rendered', () => {
+			const { container } = render(PostForm, { props: { mode: 'create' } });
+			expect(slugInput(container)).toBeNull();
+		});
+
+		it('edit mode → slug input rendered, prefilled with the current slug', () => {
+			const { container } = render(PostForm, {
+				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
+			});
+			const input = slugInput(container);
+			expect(input).not.toBeNull();
+			expect(input!.value).toBe('existing');
+		});
+
+		it('edit mode → help text mentions redirect behaviour', () => {
+			const { container } = render(PostForm, {
+				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
+			});
+			expect(container.textContent?.toLowerCase()).toContain('redirect');
+		});
+
+		it('changing the slug → PATCH payload includes the new slug', async () => {
+			const fetchMock = stubFetchOk({ ok: true, slug: 'renamed' });
+			const { container, getByRole } = render(PostForm, {
+				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
+			});
+			await fireEvent.input(slugInput(container)!, { target: { value: 'renamed' } });
+			await fireEvent.click(getByRole('button', { name: 'Save' }));
+
+			const call = fetchMock.mock.calls[0];
+			expect(call[0]).toBe('/api/post/existing');
+			expect(call[1].body).toContain('"slug":"renamed"');
+		});
+
+		it('submitting with an unchanged slug → PATCH payload omits the slug field', async () => {
+			const fetchMock = stubFetchOk({ ok: true, slug: 'existing' });
+			const { container, getByRole } = render(PostForm, {
+				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
+			});
+			await fireEvent.click(getByRole('button', { name: 'Save' }));
+
+			const call = fetchMock.mock.calls[0];
+			expect(call[1].body).not.toContain('"slug":');
+		});
+
+		it('409 response from the server surfaces as an inline error', async () => {
+			const fetchMock = vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ error: 'slug "taken" is already in use' }), {
+					status: 409,
+					headers: { 'Content-Type': 'application/json' }
+				})
+			);
+			vi.stubGlobal('fetch', fetchMock);
+			const { container, getByRole, findByRole } = render(PostForm, {
+				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
+			});
+			await fireEvent.input(slugInput(container)!, { target: { value: 'taken' } });
+			await fireEvent.click(getByRole('button', { name: 'Save' }));
+			const alert = await findByRole('alert');
+			expect(alert.textContent?.toLowerCase()).toContain('already in use');
+		});
 	});
 
 	it('shows server error message when API returns non-2xx', async () => {

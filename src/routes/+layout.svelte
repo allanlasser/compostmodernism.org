@@ -66,7 +66,6 @@
     display: flex;
     flex-wrap: wrap;
     align-self: baseline;
-    justify-content: flex-end;
     gap: 1em;
     font-style: italic;
     font-size: var(--size-meta);
@@ -76,6 +75,7 @@
 	.byline {
 		align-self: baseline;
 		font-style: italic;
+    justify-content: flex-end;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
 	}
@@ -92,14 +92,23 @@
     margin-bottom: calc(3*var(--space-section));
 	}
 
-	@media (max-width: 640px) {
-		.site-header {
-      align-items: baseline;
-			gap: var(--space-stack);
+  @media (max-width: 760px) {
+    .site-header {
 			padding: 2em 1em 0;
 		}
 		.site-main {
-			padding: 0 1em;
+			padding: var(--space-section) 1em;
 		}
+  }
+
+	@media (max-width: 640px) {
+		.site-header {
+      grid-template-columns: 1fr;
+      align-items: baseline;
+			gap: 0.5em var(--space-stack);
+		}
+    .admin-links {
+      justify-content: flex-start;
+    }
 	}
 </style>

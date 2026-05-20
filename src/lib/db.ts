@@ -44,6 +44,15 @@ export interface PostUpdate {
 	title?: string | null;
 	url?: string | null;
 	tags?: string[];
+	slug?: string;
+	created_at?: number;
+}
+
+export interface OldPath {
+	year: number;
+	month: number;
+	day: number;
+	slug: string;
 }
 
 export interface InsertResult {
@@ -280,17 +289,66 @@ export function createDb(path: string) {
 			.all() as TagWithCount[];
 	}
 
-	function updatePost(slug: string, update: PostUpdate): void {
-		raw.prepare(
-			'UPDATE posts SET body = ?, title = ?, url = ? WHERE slug = ?'
-		).run(update.body, update.title ?? null, update.url ?? null, slug);
+	function slugTaken(slug: string): boolean {
+		return raw.prepare('SELECT 1 FROM posts WHERE slug = ?').get(slug) !== undefined;
+	}
 
-		const post = raw.prepare('SELECT id FROM posts WHERE slug = ?').get(slug) as
-			| { id: number }
-			| undefined;
-		if (!post) return;
-		if (Array.isArray(update.tags)) setPostTags(post.id, update.tags);
-		setPostImages(post.id, update.body);
+	function recordSlugRedirect(oldPath: OldPath, postId: number): void {
+		raw.prepare(
+			`INSERT INTO slug_redirects (old_year, old_month, old_day, old_slug, post_id)
+			 VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT (old_year, old_month, old_day, old_slug)
+			 DO UPDATE SET post_id = excluded.post_id`
+		).run(oldPath.year, oldPath.month, oldPath.day, oldPath.slug, postId);
+	}
+
+	function getPostByOldPath(oldPath: OldPath): Post | null {
+		const row = raw
+			.prepare(
+				`SELECT p.* FROM posts p
+				 JOIN slug_redirects r ON r.post_id = p.id
+				 WHERE r.old_year = ? AND r.old_month = ? AND r.old_day = ? AND r.old_slug = ?`
+			)
+			.get(oldPath.year, oldPath.month, oldPath.day, oldPath.slug) as PostRow | undefined;
+		return row ? hydrate(row) : null;
+	}
+
+	function updatePost(slug: string, update: PostUpdate): void {
+		const existing = raw
+			.prepare('SELECT id, slug, created_at FROM posts WHERE slug = ?')
+			.get(slug) as { id: number; slug: string; created_at: number } | undefined;
+		if (!existing) return;
+
+		const newSlug = update.slug ?? existing.slug;
+		const newCreatedAt = update.created_at ?? existing.created_at;
+		const pathChanged = newSlug !== existing.slug || newCreatedAt !== existing.created_at;
+
+		if (pathChanged) {
+			const oldDate = new Date(existing.created_at);
+			recordSlugRedirect(
+				{
+					year: oldDate.getUTCFullYear(),
+					month: oldDate.getUTCMonth() + 1,
+					day: oldDate.getUTCDate(),
+					slug: existing.slug
+				},
+				existing.id
+			);
+		}
+
+		raw.prepare(
+			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ? WHERE id = ?'
+		).run(
+			update.body,
+			update.title ?? null,
+			update.url ?? null,
+			newSlug,
+			newCreatedAt,
+			existing.id
+		);
+
+		if (Array.isArray(update.tags)) setPostTags(existing.id, update.tags);
+		setPostImages(existing.id, update.body);
 	}
 
 	function deletePost(slug: string): void {
@@ -307,6 +365,8 @@ export function createDb(path: string) {
 		getAllTags,
 		updatePost,
 		deletePost,
+		slugTaken,
+		getPostByOldPath,
 		recordImage,
 		getImages,
 		countImages,
@@ -337,6 +397,9 @@ export const getAllTags: Db['getAllTags'] = () => defaultDb().getAllTags();
 export const updatePost: Db['updatePost'] = (slug, update) =>
 	defaultDb().updatePost(slug, update);
 export const deletePost: Db['deletePost'] = (slug) => defaultDb().deletePost(slug);
+export const slugTaken: Db['slugTaken'] = (slug) => defaultDb().slugTaken(slug);
+export const getPostByOldPath: Db['getPostByOldPath'] = (oldPath) =>
+	defaultDb().getPostByOldPath(oldPath);
 export const recordImage: Db['recordImage'] = (key) => defaultDb().recordImage(key);
 export const getImages: Db['getImages'] = (opts) => defaultDb().getImages(opts);
 export const countImages: Db['countImages'] = () => defaultDb().countImages();

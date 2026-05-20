@@ -79,9 +79,11 @@ This file is the architectural overview — what the running app actually is.
 2. **Read** — the feed loader calls `getPosts` (default limit 50, reverse-chronological,
    hydrated with `tags` and a `date` alias). Each post is rendered by `FeedItem.svelte`,
    which switches on link/titled/plain.
-3. **Edit** — `/admin` shows a `<details>` block per post. Saving issues
-   `PATCH /api/post/[slug]`; the slug never changes, omitted fields keep their old
-   values, and the body re-runs `setPostImages` to rebuild image join rows.
+3. **Edit** — `/admin/posts/[slug]` (or the inline editor from the feed) issues
+   `PATCH /api/post/[slug]`. Omitted fields keep their old values; the body re-runs
+   `setPostImages` to rebuild image join rows. A slug *can* be changed: the old
+   `(year, month, day, slug)` tuple is recorded in `slug_redirects` and the
+   single-post loader 301s old URLs to the post's new canonical path on next visit.
 4. **Archive** — nightly cron runs `scripts/export-and-backup.ts`: writes
    `archive/YYYY/MM/DD/slug.md` with YAML frontmatter for every post (idempotent —
    re-runs overwrite), then `PutObject`s `posts.db` to R2 under
@@ -112,6 +114,15 @@ Every successful `/api/upload` calls `recordImage(key)`; every post create/updat
 calls `setPostImages(postId, body)` which scans the body for R2 URLs (respecting
 `R2_PUBLIC_URL`) and rebuilds the join rows. The ledger lets future tooling answer
 "which posts reference this image?" and "which images are orphaned?".
+
+The slug-redirect ledger (`slug_redirects`, migration `002`) records every
+`(old_year, old_month, old_day, old_slug)` tuple a post used to live at. Rows point
+to `post_id` (not a path string), so successive renames automatically resolve to
+the post's current canonical URL via a single JOIN — no chain walking. The
+single-post route loader (`src/routes/[year]/[month]/[day]/[slug]/+page.server.ts`)
+consults the ledger only when the live slug lookup misses; a hit becomes a 301 to
+the post's current `permalink`. `ON DELETE CASCADE` cleans up ledger rows when a
+post is deleted, so stale redirects can't outlive their targets.
 
 ### Auth
 
@@ -200,16 +211,19 @@ Creates a new post.
 ### `PATCH /api/post/[slug]`
 
 Updates an existing post. All fields are optional; omitted fields keep their
-existing values.
+existing values. Passing `slug` or `created_at` moves the post: the old path
+tuple is recorded in `slug_redirects` and future GETs on the old URL 301 to
+the new canonical permalink.
 
 | Status | Body | Condition |
 |--------|------|-----------|
 | 401 | `{ error: "Unauthorized" }` | Missing or wrong Bearer token |
 | 400 | `{ error }` | Invalid body, or `url` provided without `title` |
 | 404 | `{ error: "Not found" }` | No post with that slug |
-| 200 | `{ ok: true }` | Post updated |
+| 409 | `{ error }` | Requested `slug` is already in use by another post |
+| 200 | `{ ok: true, slug: string }` | Post updated; `slug` is the current (post-rename) slug |
 
-**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[] }`
+**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number }`
 
 ### `DELETE /api/post/[slug]`
 

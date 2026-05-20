@@ -40,6 +40,7 @@
 	let body = $state(untrack(() => initial.body ?? ''));
 	let url = $state(untrack(() => initial.url ?? ''));
 	let tags = $state(untrack(() => tagsToString(initial.tags)));
+	let slug = $state(untrack(() => initial.slug ?? ''));
 
 	let bodyTextarea: HTMLTextAreaElement | undefined = $state();
 
@@ -106,11 +107,17 @@
 			mode === 'create' ? '/api/post' : `/api/post/${encodeURIComponent(initial.slug ?? '')}`;
 		const method = mode === 'create' ? 'POST' : 'PATCH';
 
+		const wirePayload: Record<string, unknown> = { ...parsed.data };
+		const trimmedSlug = slug.trim();
+		if (mode === 'edit' && trimmedSlug && trimmedSlug !== (initial.slug ?? '')) {
+			wirePayload.slug = trimmedSlug;
+		}
+
 		try {
 			const res = await fetch(url2, {
 				method,
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(parsed.data)
+				body: JSON.stringify(wirePayload)
 			});
 			if (!res.ok) {
 				const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
@@ -171,6 +178,19 @@
       <input type="url" bind:value={url} disabled={submitting} />
       {#if fieldErrors.url}<span class="field-error">{fieldErrors.url}</span>{/if}
     </label>
+
+    {#if mode === 'edit'}
+      <label>
+        <span class="label">Slug <span class="hint">(changing this leaves a 301 redirect behind)</span></span>
+        <input
+          type="text"
+          name="slug"
+          bind:value={slug}
+          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+          disabled={submitting}
+        />
+      </label>
+    {/if}
 
     <label>
       <span class="label">Tags <span class="hint">(comma-separated)</span></span>

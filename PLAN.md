@@ -908,6 +908,187 @@ composer.
 
 ---
 
+## Phase 13 — Slug Redirect Ledger
+
+**Goal:** Cool URIs don't change — but when they have to, they redirect. A
+`slug_redirects` table records every old path a post used to live at; the
+single-post route loader consults it on 404 and issues a 301 to the post's
+current canonical URL.
+
+### Design decisions (locked before coding)
+
+- **Store the whole path tuple**, not just the slug. Columns are
+  `(old_year, old_month, old_day, old_slug)` so a date correction is the same
+  mechanism as a slug rename. `UNIQUE` on the tuple; the most recent claim wins
+  via `ON CONFLICT DO UPDATE SET post_id = excluded.post_id`.
+- **Rows point to `post_id`, not to a path string.** Renaming again automatically
+  fixes prior redirects because they resolve through the post — no chain
+  walking, no UPDATE fan-out. Rename loops are impossible by construction.
+- **Cascade on post delete.** `ON DELETE CASCADE` removes ledger rows when the
+  target post goes away. Better an honest 404 than a redirect into the void.
+- **Ledger writes happen in `updatePost`**, inside the same logical operation
+  as the slug/date change. Can't end up with a renamed post and no redirect.
+- **Slug collisions on rename are a route-layer concern.** `updatePost` trusts
+  its input; the PATCH handler pre-checks uniqueness and returns 409 with a
+  clear error before calling into the DB layer.
+- **Initial publish never writes a ledger row** — the old URL never existed.
+- **Live route always wins.** If a new post takes a slug that's also in the
+  ledger, the live route is served; the stale ledger row becomes unreachable
+  but does no harm.
+- **Date editing is in scope for the schema** (we store the full tuple) but
+  out of scope for the UI in this phase — only slug edits get an input. The
+  ledger is forward-compatible if/when a date input is added.
+
+### Files
+
+- `migrations/002_slug_redirects.sql` *(new)* — the table + index.
+- `src/lib/db.ts` — extend `PostUpdate` with `slug?: string` and
+  `created_at?: number`; have `updatePost` write a `slug_redirects` row when
+  either changes; add `getPostByOldPath({ year, month, day, slug })` for the
+  route loader; add `slugTaken(slug)` helper used by the PATCH route's
+  collision check.
+- `src/lib/schemas.ts` — add `slug` (optional, slugified-format) to
+  `postUpdateSchema`.
+- `src/routes/api/post/[slug]/+server.ts` — handle the rename branch:
+  validate, check collision (409), forward to `updatePost`.
+- `src/routes/[year]/[month]/[day]/[slug]/+page.server.ts` — on 404, consult
+  `getPostByOldPath`; if hit, `redirect(301, permalink(post))`.
+- `src/lib/components/admin/PostForm.svelte` — slug input visible only in
+  `edit` mode; help text warns "Changing this leaves a 301 redirect behind."
+- Tests next to each touched source file.
+
+### 13.1 — Migration + DB ledger functions
+
+#### Red → Green cycles
+
+`migrations/002_slug_redirects.sql` (covered via `src/lib/db.test.ts`):
+```
+test: slug_redirects table exists with expected columns
+test: UNIQUE constraint on (old_year, old_month, old_day, old_slug)
+test: deleting a post cascades to its slug_redirects rows
+test: migration is idempotent against an existing db (runs once, version bumps)
+```
+
+`recordSlugRedirect(oldPath, postId)` *(internal helper)*:
+```
+test: inserts a row when none exists
+test: same tuple + same post_id → no-op (no extra row, no error)
+test: same tuple + different post_id → row's post_id is updated (last claim wins)
+```
+
+`getPostByOldPath({ year, month, day, slug })`:
+```
+test: returns the hydrated post when a ledger row points to it
+test: returns null when no ledger row matches
+test: returns null when the ledger row's post has been deleted (cascade gone)
+```
+
+`slugTaken(slug)`:
+```
+test: returns true when a post exists with that slug
+test: returns false when no post exists with that slug
+test: does not consider ledger rows (only live posts)
+```
+
+`updatePost` rename branch:
+```
+test: passing the same slug → no ledger row written
+test: passing a different slug → posts.slug updated, ledger row records OLD tuple
+test: passing a new created_at → posts.created_at updated, ledger row records OLD tuple
+test: passing both new slug AND new created_at → single ledger row with OLD tuple
+test: caller is responsible for collision check (db.ts does not enforce uniqueness)
+test: existing body/title/url/tags update behaviour unchanged
+```
+
+#### Checkpoint 13.1
+
+- [x] `npm test` — 15 new db tests green; full db suite at 69 tests passing.
+- [ ] `npx tsx scripts/init-db.ts` against an existing `posts.db` — migration
+      applies, `PRAGMA user_version` bumps to 2, no data loss. *(manual)*
+
+### 13.2 — Schema + PATCH route
+
+#### Red → Green cycles
+
+`postUpdateSchema` (in `src/lib/schemas.test.ts`):
+```
+test: accepts optional slug matching /^[a-z0-9-]+$/
+test: rejects slug with spaces, uppercase, or other invalid chars
+test: accepts optional created_at as positive integer (ms epoch)
+```
+
+`PATCH /api/post/[slug]` (in `src/routes/api/post/[slug]/edit.test.ts`):
+```
+test: rename to an unused slug → 200 + { ok, slug: newSlug }
+test: rename to slug already used by another post → 409 + { error }
+test: rename to the same slug → 200, no-op (no ledger row)
+test: rename + body update in one request → both applied, ledger written
+test: created_at update writes ledger row for old date
+test: unchanged created_at → no ledger row
+test: invalid slug format → 400 (zod)
+```
+
+#### Checkpoint 13.2
+
+- [x] `npm test` — 4 new schema tests + 6 new PATCH tests green; existing PATCH
+      suite updated to match `{ ok, slug }` response shape and still passes.
+
+### 13.3 — Route loader lookup on 404
+
+#### Red → Green cycles
+
+`src/routes/[year]/[month]/[day]/[slug]/page.server.test.ts`:
+```
+test: live post at correct path → returns post (unchanged behaviour)
+test: live post at wrong date → 301 to canonical (unchanged behaviour)
+test: no live post but ledger hit → 301 to current canonical URL of target post
+test: ledger hit but target post deleted → 404 (cascade removed the row)
+test: no live post, no ledger hit → 404
+test: ledger lookup uses ALL four path parts, not just slug
+  (a renamed post with the same slug at a different date does not match)
+```
+
+#### Checkpoint 13.3
+
+- [x] `npm test` — 4 new loader tests green; existing 3 still pass.
+
+### 13.4 — Admin UI: slug input on edit
+
+#### Red → Green cycles
+
+`PostForm.svelte.test.ts`:
+```
+test: create mode → no slug input rendered
+test: edit mode → slug input rendered, prefilled with current slug
+test: edit mode → help text mentions redirect behaviour
+test: changing slug → PATCH payload includes new slug
+test: 409 response → form shows "That slug is already in use" inline
+```
+
+#### Checkpoint 13.4
+
+- [x] `npm test` — 6 new PostForm slug-input tests green; one existing
+      positional `pre-fills inputs` test was migrated to label-based selectors
+      so the new slug input doesn't shift sibling positions.
+- [ ] `npm run check` — Phase-13 surface introduces no new type errors; 8
+      pre-existing errors from the in-progress Phase 11/12 UI work remain.
+
+### Checkpoint 13 (overall)
+
+- [x] `npm test` — Phase-13 surface (34 new tests) all green; no regressions
+      to previously-passing tests. (The 32 pre-existing failures from the
+      unfinished Phase 11/12 UI work are unrelated to Phase 13.)
+- [x] `npm run check` — Phase-13 code introduces no new type errors.
+- [ ] Manual browser pass (per CLAUDE.md feedback memory):
+  - rename a published post via `/admin/posts/[slug]`; visit the OLD URL →
+    301 lands on the new canonical URL.
+  - try to rename to a slug already used by another post → inline error,
+    no DB change.
+  - delete the renamed post → old URL now 404s (no orphan redirect).
+  - confirm date-mismatch redirect still works on a non-renamed post.
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

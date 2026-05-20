@@ -3,18 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('$lib/db', () => ({
 	getPostBySlug: vi.fn(),
 	updatePost: vi.fn(),
-	deletePost: vi.fn()
+	deletePost: vi.fn(),
+	slugTaken: vi.fn()
 }));
 vi.mock('$env/dynamic/private', () => ({
 	env: { POST_SECRET: 'test-secret' }
 }));
 
 import { PATCH, DELETE } from './+server';
-import { getPostBySlug, updatePost, deletePost } from '$lib/db';
+import { getPostBySlug, updatePost, deletePost, slugTaken } from '$lib/db';
 
 const mockGet = vi.mocked(getPostBySlug);
 const mockUpdate = vi.mocked(updatePost);
 const mockDelete = vi.mocked(deletePost);
+const mockSlugTaken = vi.mocked(slugTaken);
 
 function req(body: unknown, auth?: string): Request {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -46,6 +48,8 @@ beforeEach(() => {
 	mockGet.mockReset();
 	mockUpdate.mockReset();
 	mockDelete.mockReset();
+	mockSlugTaken.mockReset();
+	mockSlugTaken.mockReturnValue(false);
 });
 
 describe('PATCH /api/post/[slug]', () => {
@@ -85,14 +89,14 @@ describe('PATCH /api/post/[slug]', () => {
 		expect(mockUpdate).not.toHaveBeenCalled();
 	});
 
-	it('200 valid update returns ok', async () => {
+	it('200 valid update returns ok with the (unchanged) slug', async () => {
 		mockGet.mockReturnValue(existing);
 		const res = await PATCH({
 			request: req({ body: 'new body' }, 'Bearer test-secret'),
 			params: { slug: 'hello' }
 		} as never);
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ ok: true });
+		expect(await res.json()).toEqual({ ok: true, slug: 'hello' });
 	});
 
 	it('200 valid update with session cookie (no Bearer header)', async () => {
@@ -139,6 +143,67 @@ describe('PATCH /api/post/[slug]', () => {
 		expect(mockUpdate).toHaveBeenCalledWith(
 			'hello',
 			expect.objectContaining({ tags: ['a', 'b'] })
+		);
+	});
+
+	it('rename to an unused slug → 200 + { ok, slug: newSlug }', async () => {
+		mockGet.mockReturnValue(existing);
+		mockSlugTaken.mockReturnValue(false);
+		const res = await PATCH({
+			request: req({ slug: 'greetings' }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ ok: true, slug: 'greetings' });
+		expect(mockUpdate).toHaveBeenCalledWith(
+			'hello',
+			expect.objectContaining({ slug: 'greetings' })
+		);
+	});
+
+	it('rename to a slug already used by another post → 409', async () => {
+		mockGet.mockReturnValue(existing);
+		mockSlugTaken.mockReturnValue(true);
+		const res = await PATCH({
+			request: req({ slug: 'taken' }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(409);
+		expect(mockUpdate).not.toHaveBeenCalled();
+	});
+
+	it('rename to the same slug is a no-op — does not call slugTaken, succeeds', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await PATCH({
+			request: req({ slug: 'hello' }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockSlugTaken).not.toHaveBeenCalled();
+		expect(mockUpdate).toHaveBeenCalled();
+	});
+
+	it('invalid slug format → 400 (zod)', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await PATCH({
+			request: req({ slug: 'Has Spaces' }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(400);
+		expect(mockUpdate).not.toHaveBeenCalled();
+	});
+
+	it('created_at update is forwarded to updatePost', async () => {
+		mockGet.mockReturnValue(existing);
+		const newDate = existing.created_at + 86400000;
+		const res = await PATCH({
+			request: req({ created_at: newDate }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockUpdate).toHaveBeenCalledWith(
+			'hello',
+			expect.objectContaining({ created_at: newDate })
 		);
 	});
 });

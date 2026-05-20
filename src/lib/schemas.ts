@@ -28,7 +28,12 @@ export const postUpdateSchema = z.object({
 	body: z.string().trim().optional(),
 	title: z.string().trim().nullable().optional(),
 	url: z.string().trim().nullable().optional(),
-	tags: z.array(z.string().trim()).optional()
+	tags: z.array(z.string().trim()).optional(),
+	slug: z
+		.string()
+		.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase letters, digits, and hyphens')
+		.optional(),
+	created_at: z.number().int().positive().optional()
 });
 
 export type PostUpdateInput = z.input<typeof postUpdateSchema>;

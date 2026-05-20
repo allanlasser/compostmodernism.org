@@ -30,6 +30,38 @@ describe('schema', () => {
 		).toThrow(/FOREIGN KEY/);
 	});
 
+	it('creates slug_redirects table (Phase 13 ledger)', () => {
+		const names = (
+			db.raw
+				.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+				.all() as { name: string }[]
+		).map((t) => t.name);
+		expect(names).toContain('slug_redirects');
+	});
+
+	it('slug_redirects enforces UNIQUE on (old_year, old_month, old_day, old_slug)', () => {
+		const { id } = db.insertPost({ body: 'b', title: 'a' });
+		const insert = db.raw.prepare(
+			'INSERT INTO slug_redirects (old_year, old_month, old_day, old_slug, post_id) VALUES (?, ?, ?, ?, ?)'
+		);
+		insert.run(2026, 5, 19, 'foo', id);
+		expect(() => insert.run(2026, 5, 19, 'foo', id)).toThrow(/UNIQUE/);
+	});
+
+	it('post deletion cascades to slug_redirects', () => {
+		const { slug, id } = db.insertPost({ body: 'b', title: 'a' });
+		db.raw
+			.prepare(
+				'INSERT INTO slug_redirects (old_year, old_month, old_day, old_slug, post_id) VALUES (?, ?, ?, ?, ?)'
+			)
+			.run(2026, 5, 19, 'foo', id);
+		db.deletePost(slug);
+		const row = db.raw
+			.prepare('SELECT COUNT(*) AS n FROM slug_redirects WHERE post_id = ?')
+			.get(id) as { n: number };
+		expect(row.n).toBe(0);
+	});
+
 	it('creates images + post_images tables (Phase 9 ledger)', () => {
 		const names = (
 			db.raw
@@ -371,6 +403,160 @@ describe('updatePost', () => {
 		const { slug } = db.insertPost({ body: 'b', tags: ['a', 'b'] });
 		db.updatePost(slug, { body: 'changed' });
 		expect(db.getPostBySlug(slug)?.tags.map((t) => t.slug).sort()).toEqual(['a', 'b']);
+	});
+});
+
+describe('updatePost — slug & date changes (Phase 13)', () => {
+	function ledgerRows(postId: number) {
+		return db.raw
+			.prepare(
+				'SELECT old_year, old_month, old_day, old_slug FROM slug_redirects WHERE post_id = ? ORDER BY id'
+			)
+			.all(postId) as { old_year: number; old_month: number; old_day: number; old_slug: string }[];
+	}
+
+	it('passing the same slug writes no ledger row', () => {
+		const { slug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.updatePost(slug, { body: 'b', slug });
+		expect(ledgerRows(id)).toHaveLength(0);
+	});
+
+	it('passing a new slug renames the post and records the OLD path in the ledger', () => {
+		const { slug: oldSlug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(oldSlug)!;
+		const d = new Date(post.created_at);
+		const oldYear = d.getUTCFullYear();
+		const oldMonth = d.getUTCMonth() + 1;
+		const oldDay = d.getUTCDate();
+
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+
+		expect(db.getPostBySlug(oldSlug)).toBeNull();
+		expect(db.getPostBySlug('greetings')).not.toBeNull();
+		expect(ledgerRows(id)).toEqual([
+			{ old_year: oldYear, old_month: oldMonth, old_day: oldDay, old_slug: oldSlug }
+		]);
+	});
+
+	it('passing a new created_at writes a ledger row for the OLD date', () => {
+		const { slug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(slug)!;
+		const d = new Date(post.created_at);
+		const oldYear = d.getUTCFullYear();
+		const oldMonth = d.getUTCMonth() + 1;
+		const oldDay = d.getUTCDate();
+
+		// Bump created_at forward by 10 days.
+		const newCreatedAt = post.created_at + 10 * 24 * 60 * 60 * 1000;
+		db.updatePost(slug, { body: 'b', created_at: newCreatedAt });
+
+		expect(ledgerRows(id)).toEqual([
+			{ old_year: oldYear, old_month: oldMonth, old_day: oldDay, old_slug: slug }
+		]);
+		expect(db.getPostBySlug(slug)?.created_at).toBe(newCreatedAt);
+	});
+
+	it('changing slug AND created_at writes a single ledger row with the old tuple', () => {
+		const { slug: oldSlug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(oldSlug)!;
+		const d = new Date(post.created_at);
+		const oldYear = d.getUTCFullYear();
+		const oldMonth = d.getUTCMonth() + 1;
+		const oldDay = d.getUTCDate();
+
+		db.updatePost(oldSlug, {
+			body: 'b',
+			slug: 'greetings',
+			created_at: post.created_at + 10 * 24 * 60 * 60 * 1000
+		});
+
+		expect(ledgerRows(id)).toEqual([
+			{ old_year: oldYear, old_month: oldMonth, old_day: oldDay, old_slug: oldSlug }
+		]);
+	});
+
+	it('renaming twice records both old slugs', () => {
+		const { slug: s1, id } = db.insertPost({ body: 'b', title: 'one' });
+		db.updatePost(s1, { body: 'b', slug: 'two' });
+		db.updatePost('two', { body: 'b', slug: 'three' });
+		const slugs = ledgerRows(id).map((r) => r.old_slug);
+		expect(slugs.sort()).toEqual([s1, 'two'].sort());
+	});
+});
+
+describe('getPostByOldPath (Phase 13)', () => {
+	it('returns the hydrated post when a ledger row points to it', () => {
+		const { slug: oldSlug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(oldSlug)!;
+		const d = new Date(post.created_at);
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+
+		const found = db.getPostByOldPath({
+			year: d.getUTCFullYear(),
+			month: d.getUTCMonth() + 1,
+			day: d.getUTCDate(),
+			slug: oldSlug
+		});
+		expect(found?.id).toBe(id);
+		expect(found?.slug).toBe('greetings');
+	});
+
+	it('returns null when no ledger row matches', () => {
+		expect(
+			db.getPostByOldPath({ year: 2026, month: 1, day: 1, slug: 'never-existed' })
+		).toBeNull();
+	});
+
+	it('returns null when the target post has been deleted (cascade)', () => {
+		const { slug: oldSlug } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(oldSlug)!;
+		const d = new Date(post.created_at);
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+		db.deletePost('greetings');
+
+		expect(
+			db.getPostByOldPath({
+				year: d.getUTCFullYear(),
+				month: d.getUTCMonth() + 1,
+				day: d.getUTCDate(),
+				slug: oldSlug
+			})
+		).toBeNull();
+	});
+
+	it('matches on the full tuple — same slug at a different date does not match', () => {
+		const { slug: oldSlug } = db.insertPost({ body: 'b', title: 'Hello' });
+		const post = db.getPostBySlug(oldSlug)!;
+		const d = new Date(post.created_at);
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+
+		const wrongDay = (d.getUTCDate() % 28) + 1;
+		expect(
+			db.getPostByOldPath({
+				year: d.getUTCFullYear(),
+				month: d.getUTCMonth() + 1,
+				day: wrongDay,
+				slug: oldSlug
+			})
+		).toBeNull();
+	});
+});
+
+describe('slugTaken (Phase 13)', () => {
+	it('returns true when a live post uses the slug', () => {
+		db.insertPost({ body: 'b', title: 'Hello' });
+		expect(db.slugTaken('hello')).toBe(true);
+	});
+
+	it('returns false when no post uses the slug', () => {
+		expect(db.slugTaken('vacant')).toBe(false);
+	});
+
+	it('does not consider ledger rows — only live posts', () => {
+		const { slug: oldSlug } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+		// 'hello' now only exists in the ledger.
+		expect(db.slugTaken(oldSlug)).toBe(false);
 	});
 });
 

@@ -33,6 +33,29 @@ describe('postUpdateSchema', () => {
 		const r = postUpdateSchema.safeParse({ title: 'new' });
 		expect(r.success).toBe(true);
 	});
+
+	it('accepts an optional slug matching lowercase, digits, hyphens', () => {
+		const r = postUpdateSchema.safeParse({ slug: 'hello-world-2' });
+		expect(r.success).toBe(true);
+	});
+
+	it('rejects a slug with spaces, uppercase, or other characters', () => {
+		for (const bad of ['Hello World', 'HELLO', 'foo bar', 'foo/bar', 'foo.bar', '']) {
+			const r = postUpdateSchema.safeParse({ slug: bad });
+			expect(r.success).toBe(false);
+		}
+	});
+
+	it('accepts an optional created_at as a positive integer (ms epoch)', () => {
+		const r = postUpdateSchema.safeParse({ created_at: 1700000000000 });
+		expect(r.success).toBe(true);
+	});
+
+	it('rejects a non-integer or non-positive created_at', () => {
+		expect(postUpdateSchema.safeParse({ created_at: -1 }).success).toBe(false);
+		expect(postUpdateSchema.safeParse({ created_at: 1.5 }).success).toBe(false);
+		expect(postUpdateSchema.safeParse({ created_at: 'today' }).success).toBe(false);
+	});
 });
 
 describe('imageMetadataSchema', () => {

@@ -49,7 +49,7 @@
 <style>
 	.post {
 		display: grid;
-		grid-template-columns: minmax(66ch, 1fr) var(--space-rail);
+		grid-template-columns: 1fr var(--space-rail);
 		gap: var(--space-gap);
 		width: 100%;
 	}
