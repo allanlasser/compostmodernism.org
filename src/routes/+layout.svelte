@@ -13,16 +13,28 @@
 
 <div class="page">
 	<header class="site-header">
-		<a class="site-title" href="/">compostmodernism</a>
-    {#if data?.admin}
-      <div class="admin-links">
-        <a href="/admin">Admin</a>
-        <SignOut />
-      </div>
-    {:else}
-		  <p class="byline">
+		<span>
+      <a class="site-title" href="/">compostmodernism</a>
+      <p class="byline">
         by <a href="https://allanlasser.com">Allan Lasser</a>
       </p>
+    </span>
+    {#if data?.admin}
+      <div class="admin">
+        <p>Hi, Allan!</p>
+        <div class="admin-links">
+          <a href="/admin">Admin</a>
+          <SignOut />
+        </div>
+      </div>
+    {:else}
+		  <div class="subscribe">
+        <p>Subscribe</p>
+        <div class="subscribe-links">
+          <a href="https://buttondown.com/compostmodernism">Email</a>
+          <a href="/feeds/posts.xml">RSS</a>
+        </div>
+      </div>
     {/if}
 	</header>
 
@@ -62,7 +74,8 @@
 		white-space: nowrap;
 	}
 
-  .admin-links {
+  .admin-links,
+  .subscribe-links {
     display: flex;
     flex-wrap: wrap;
     align-self: baseline;
@@ -70,6 +83,10 @@
     font-style: italic;
     font-size: var(--size-meta);
     color: var(--color-ink-soft);
+  }
+
+  .subscribe p {
+    font-size: var(--size-meta);
   }
 
 	.byline {
@@ -80,6 +97,7 @@
 		color: var(--color-ink-soft);
 	}
 
+  .subscribe-links a,
   .admin-links a,
 	.byline a {
 		text-decoration: none;
@@ -109,6 +127,11 @@
 		}
     .admin-links {
       justify-content: flex-start;
+    }
+    .subscribe {
+      display: flex;
+      align-items: baseline;
+      gap: 1em;
     }
 	}
 </style>
