@@ -3,9 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
 
 vi.mock('@aws-sdk/client-s3', () => ({
-	S3Client: vi.fn(() => ({ send: sendMock })),
-	PutObjectCommand: vi.fn((input) => ({ kind: 'put', input })),
-	DeleteObjectCommand: vi.fn((input) => ({ kind: 'delete', input }))
+	S3Client: vi.fn(function () {
+		return { send: sendMock };
+	}),
+	PutObjectCommand: vi.fn(function (input: unknown) {
+		return { kind: 'put', input };
+	}),
+	DeleteObjectCommand: vi.fn(function (input: unknown) {
+		return { kind: 'delete', input };
+	})
 }));
 
 vi.mock('$env/dynamic/private', () => ({

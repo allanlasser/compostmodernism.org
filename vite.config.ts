@@ -1,13 +1,29 @@
-/// <reference types="vitest" />
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [sveltekit(), svelteTesting()],
 	test: {
-		environment: 'node',
-		environmentMatchGlobs: [['src/**/*.svelte.test.ts', 'happy-dom']],
-		setupFiles: ['./vitest.setup.ts']
+		setupFiles: ['./vitest.setup.ts'],
+		projects: [
+			{
+				extends: true,
+				test: {
+					name: 'node',
+					environment: 'node',
+					include: ['src/**/*.test.ts'],
+					exclude: ['src/**/*.svelte.test.ts']
+				}
+			},
+			{
+				extends: true,
+				test: {
+					name: 'dom',
+					environment: 'happy-dom',
+					include: ['src/**/*.svelte.test.ts']
+				}
+			}
+		]
 	}
 });

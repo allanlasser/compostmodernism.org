@@ -9,7 +9,7 @@ Red-green TDD with vitest throughout. Each phase ends with a checkpoint: all tes
 - **Red** — write the failing test first
 - **Green** — write the minimum code to pass it
 - **Refactor** — clean up without breaking tests
-- **Language:** TypeScript by default. Source files are `.ts`, components use `<script lang="ts">`, tests are `.test.ts`. `svelte.config.js` conventionally stays `.js` (toolchain loads it pre-TS); `vite.config.ts` includes `/// <reference types="vitest" />` so the `test` key is typed.
+- **Language:** TypeScript by default. Source files are `.ts`, components use `<script lang="ts">`, tests are `.test.ts`. `svelte.config.js` conventionally stays `.js` (toolchain loads it pre-TS); `vite.config.ts` imports `defineConfig` from `vitest/config` so the `test` key is typed.
 - **Validation:** All API route handlers validate incoming data with [Zod](https://zod.dev) using `safeParse`. JSON bodies are parsed directly; `FormData` bodies are converted with `Object.fromEntries` before parsing. Invalid input returns a `400` before any business logic runs.
 - Test files live next to the code they test: `src/lib/slug.test.ts`, etc.
 - Database tests use an in-memory SQLite instance (`new Database(':memory:')`)
@@ -1127,20 +1127,18 @@ test: tags emitted as <category> elements
 
 Items punted from earlier phases. Address before final deploy unless noted.
 
-- **npm audit triage (Phase 1, resolved 2026-05-19):** `npm audit fix`
-  bumped `svelte` (SSR XSS via spread attributes, ReDoS, DOM clobbering,
-  promise serialization) and `devalue` (DoS via sparse-array
-  deserialization) — both runtime-reachable, both fixed in-range. The
-  remaining 10 advisories (3 low, 7 moderate) are all dev tooling
-  (`vite 5`, `vitest 1`, `@vitest/coverage-v8 1`,
-  `@sveltejs/vite-plugin-svelte 4`, and the transitive `cookie` via
-  `@sveltejs/kit`). Fixes require semver-major bumps (vite → 8, vitest
-  → 4, plugin → 7) that we deliberately defer to keep the deploy
-  surface small. The vite/esbuild advisories all describe
-  dev-server-only attack vectors (cross-origin requests to a running
-  dev server) that don't apply to production builds. Revisit when
-  SvelteKit publishes a release that pins cookie >= 0.7.0, or in a
-  dedicated tooling-upgrade pass after deploy.
+- **npm audit triage (Phase 1, resolved 2026-05-20):** `npm audit fix`
+  in May 2026 bumped `svelte` (SSR XSS via spread attributes, ReDoS,
+  DOM clobbering, promise serialization) and `devalue` (DoS via
+  sparse-array deserialization) — both runtime-reachable, both fixed
+  in-range. A follow-up branch (`deps-vite-vitest-upgrade`) then took
+  the semver-major bumps: `vite 5 → 8`, `vitest 1 → 4`,
+  `@vitest/coverage-v8 1 → 4`, `@sveltejs/vite-plugin-svelte 4 → 7`,
+  clearing the dev-server CORS (esbuild) and path-traversal (vite)
+  advisories. Cookie is held at `^0.7.0` via a `package.json#overrides`
+  block — SvelteKit 2 still ships the older transitive pin, and the
+  override is the upstream-recommended workaround until SvelteKit 3.
+  `npm audit` now reports 0 vulnerabilities.
 - **Script runtime (from Phase 3):** Decide between `tsx` at runtime vs a
   pre-compile step for `scripts/*.ts` in the Docker image. Resolve in Phase 8.
   (Less urgent than before — the server's own boot path runs migrations via

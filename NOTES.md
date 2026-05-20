@@ -5,6 +5,49 @@ entries go on top.
 
 ---
 
+## Vitest 4 + Vite 8 upgrade: three things that bit us
+
+When taking the May 2026 upgrade (`vite 5 → 8`, `vitest 1 → 4`,
+`@sveltejs/vite-plugin-svelte 4 → 7`, `@vitest/coverage-v8 1 → 4`) on
+the `deps-vite-vitest-upgrade` branch, three breakages surfaced that
+aren't loud in the upstream changelogs.
+
+1. **`/// <reference types="vitest" />` no longer augments `vite`'s
+   `defineConfig`.** The `test` key is now part of `vitest/config`,
+   not added to the `vite` module via ambient declaration. Fix:
+   `import { defineConfig } from 'vitest/config'` in `vite.config.ts`
+   and drop the triple-slash. Symptom: `svelte-check` reports
+   `Object literal may only specify known properties, and 'test' does
+   not exist in type 'UserConfigExport'`.
+
+2. **`environmentMatchGlobs` was removed in vitest 4.** Tests that
+   need a DOM (anything rendering Svelte components in
+   `*.svelte.test.ts`) silently fall back to the default `node`
+   environment and crash with `ReferenceError: document is not
+   defined` inside `@testing-library/svelte-core/setup.js`. Fix:
+   configure `test.projects` with one project per environment —
+   `node` for `*.test.ts` excluding `*.svelte.test.ts`, and
+   `happy-dom` for `*.svelte.test.ts`.
+
+3. **`vi.fn(() => obj)` is no longer constructable with `new`.**
+   Arrow functions have no `[[Construct]]` slot at the JS level;
+   vitest 3 worked around this internally, vitest 4 propagates the
+   underlying `TypeError: ... is not a constructor`. Fix: any
+   `vi.mock` that stubs a class (e.g. `S3Client` and the command
+   classes from `@aws-sdk/client-s3`) must use a `function`
+   expression or `class`. Vitest emits a hint warning: *"The vi.fn()
+   mock did not use 'function' or 'class' in its implementation."*
+
+Also worth knowing:
+
+- `--reporter=basic` was removed in vitest 4 (the default reporter
+  changed). Drop the flag.
+- `cookie` is pinned to `^0.7.0` via `package.json#overrides` because
+  `@sveltejs/kit@2` still ships an older transitive version. The
+  override is the upstream-recommended workaround until SvelteKit 3.
+
+---
+
 ## Helpers exported from `+server.ts` must start with `_`
 
 Vitest happily imports `buildFeed` from a `+server.ts` file and the test
