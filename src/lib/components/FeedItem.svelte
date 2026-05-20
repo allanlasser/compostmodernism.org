@@ -2,6 +2,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import Dateline from './Dateline.svelte';
 	import TagList from './TagList.svelte';
+	import Lightbox from './Lightbox.svelte';
 	import { renderMarkdown } from '$lib/markdown';
   import type { Post } from '$lib/types';
 
@@ -14,6 +15,42 @@
 
 	let post = $state<Post>(untrack(() => ({ ...item, tags: [...item.tags] })));
 	let bodyHtml = $derived(renderMarkdown(post.body));
+
+	type LightboxState = {
+		src: string;
+		alt: string;
+		sourceRect: DOMRect;
+		naturalWidth: number;
+		naturalHeight: number;
+		sourceEl: HTMLImageElement;
+	};
+	let lightbox = $state<LightboxState | null>(null);
+
+	function onBodyClick(e: MouseEvent) {
+		const target = e.target;
+		if (!(target instanceof HTMLImageElement)) return;
+		if (target.closest('a')) return;
+		e.preventDefault();
+		if (
+			typeof window !== 'undefined' &&
+			window.matchMedia('(max-width: 640px)').matches
+		) {
+			target.classList.toggle('is-tapped');
+			return;
+		}
+		lightbox = {
+			src: target.currentSrc || target.src,
+			alt: target.alt,
+			sourceRect: target.getBoundingClientRect(),
+			naturalWidth: target.naturalWidth,
+			naturalHeight: target.naturalHeight,
+			sourceEl: target
+		};
+	}
+
+	function closeLightbox() {
+		lightbox = null;
+	}
 </script>
 
 <article
@@ -34,7 +71,12 @@
         {/if}
       </h2>
     {/if}
-    <div class="body">{@html bodyHtml}</div>
+    <div
+      class="body"
+      role="presentation"
+      onclick={onBodyClick}
+      onkeydown={() => {}}
+    >{@html bodyHtml}</div>
 	</div>
 
 	<aside class="rail">
@@ -45,6 +87,18 @@
     {#if rail}{@render rail()}{/if}
 	</aside>
 </article>
+
+{#if lightbox}
+	<Lightbox
+		src={lightbox.src}
+		alt={lightbox.alt}
+		sourceRect={lightbox.sourceRect}
+		naturalWidth={lightbox.naturalWidth}
+		naturalHeight={lightbox.naturalHeight}
+		sourceEl={lightbox.sourceEl}
+		onClose={closeLightbox}
+	/>
+{/if}
 
 <style>
 	.post {
@@ -77,6 +131,26 @@
 		height: auto;
 		margin-top: var(--space-stack);
     border-radius: 4px;
+    opacity: 0.8;
+    cursor: zoom-in;
+    transition: opacity .15s linear;
+    &:hover {
+      opacity: 1;
+    }
+	}
+
+	.body :global(img.is-tapped) {
+		opacity: 1;
+	}
+
+	.body :global(a img) {
+		cursor: pointer;
+	}
+
+	.body :global(img[data-lightbox-source]) {
+		visibility: hidden;
+		opacity: 1;
+		transition: none;
 	}
 
 	.body :global(a) {
@@ -148,6 +222,9 @@
 			justify-content: flex-start;
       gap: 0 var(--space-stack);
       padding-top: var(--space-stack);
+		}
+		.body :global(img) {
+			cursor: default;
 		}
 	}
 </style>

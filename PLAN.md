@@ -950,15 +950,122 @@ test: 409 response → form shows "That slug is already in use" inline
 
 ---
 
+## Phase 14 — Image Lightbox
+
+Clicking an `<img>` inside a post body should expand it into a centered
+lightbox sized to fit a 90vw × 90vh box (the image keeps its aspect ratio,
+so portrait and landscape both fit). The animation runs from the image's
+in-document position to the lightbox using the FLIP technique (First →
+Last → Invert → Play). Clicking the image, clicking the backdrop, or
+pressing Escape returns the image to its place.
+
+All post body HTML is rendered through `FeedItem.svelte` (used by the home
+feed, single-post permalink, and tag feed routes), so this is a single
+component to touch. Images are stored at one size (Sharp 1600px WebP), so
+the lightbox enlarges the same `<img>` rather than swapping sources.
+
+### Files
+
+- New: `src/lib/components/Lightbox.svelte`
+- New: `src/lib/components/Lightbox.svelte.test.ts`
+- Modified: `src/lib/components/FeedItem.svelte` (delegated click handler
+  on `.body`, lightbox state, source-image hide via `data-lightbox-source`)
+- Modified: `src/lib/components/FeedItem.svelte.test.ts`
+
+### Red → Green cycles
+
+`Lightbox.svelte.test.ts`:
+```
+test: renders <img> with given src and alt
+test: clicking the image calls onClose
+test: clicking the backdrop calls onClose
+test: Escape keydown calls onClose
+test: dialog has role="dialog" and aria-modal="true"
+test: prefers-reduced-motion: reduce → mounts directly in "open" phase
+```
+
+`FeedItem.svelte.test.ts` additions:
+```
+test: clicking an <img> inside .body opens the lightbox (role=dialog)
+test: clicking an <img> nested in an <a> does not open the lightbox
+test: after onClose, the dialog is removed from the document
+```
+
+Implementation notes:
+
+- Target size: compute `targetW × targetH` from `naturalWidth/Height` and
+  `window.innerWidth/Height * 0.9`. Width-limited vs height-limited
+  decides which axis hits 90vw or 90vh.
+- FLIP: render the lightbox `<img>` `position: fixed` at its target size,
+  apply an inverse translate+scale on the first frame, then transition to
+  `transform: translate(-50%, -50%)` for the playing phase.
+- `happy-dom` does not implement layout, so unit tests assert on phase
+  class names (`is-opening`, `is-open`) rather than measured transforms.
+  The actual animation is verified by hand.
+- Lock body scroll (`overflow: hidden` on `documentElement`) while open
+  so the source rect can't drift under the close animation.
+- Honor `prefers-reduced-motion: reduce` by skipping the opening phase.
+
+### Checkpoint 14
+
+- [x] `npm test` — 9 new tests (7 Lightbox + 3 FeedItem additions for
+      a total of 294/294 green); no regressions.
+- [x] `npm run check` — 0 errors, 0 warnings across 1016 files.
+- [x] Manual browser pass (Playwright):
+  - Home feed: landscape image (1600×1200) opened to 966×724.5 at
+    viewport 1200×805 (height-limited to 90vh, aspect preserved).
+  - Portrait image (1200×1600) opened to 543.375×724.5 (also
+    height-limited, width 0.75×).
+  - Escape, backdrop click, and image click all close cleanly; on close
+    `html.style.overflow` is restored and the `data-lightbox-source`
+    marker is removed so the source image is visible again.
+  - Resize to 600×900 while open → image rescaled to 540×720
+    (width-limited at the narrower viewport) in place, no glitch.
+  - `/2026/05/16/0fc950b1` permalink and `/tag/kitchen` both open the
+    lightbox correctly (shared FeedItem).
+  - Image wrapped in `<a>` (DOM-injected): click triggered link
+    navigation, the lightbox did not open.
+  - FLIP confirmed via MutationObserver: first frame applied
+    `translate(calc(-50% - 104px), calc(-50% + 63px)) scale(0.555)`
+    (inverse of source rect), next frame `translate(-50%, -50%)`. CSS
+    `transition: transform 280ms` animates between.
+  - `prefers-reduced-motion: reduce` short-circuit covered by
+    `Lightbox.svelte.test.ts` rather than browser emulation.
+
+### Potential future upgrades
+
+Captured here so the ideas aren't lost; not in scope for Phase 14.
+
+- Multi-image gallery with arrow-key navigation between images in the
+  same post.
+- Pinch-to-zoom inside the lightbox.
+- Higher-resolution variant served on open. Would require revisiting the
+  Sharp pipeline in `src/routes/api/upload/+server.ts` to emit a second
+  variant and threading the alternate URL through `Post.body`.
+- Visible caption rendered from `alt` text inside the lightbox UI. The
+  `aria-label` already carries it for assistive tech, so this is a pure
+  visual-design decision.
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
 
-- **npm audit (from Phase 1):** `npm install` at scaffold time reported 13
-  vulnerabilities (3 low, 10 moderate), all transitive through SvelteKit/Vite
-  tooling. Run `npm audit` and triage before Phase 8. If anything reachable from
-  runtime code is affected, upgrade or pin; dev-only advisories can be
-  documented and deferred.
+- **npm audit triage (Phase 1, resolved 2026-05-19):** `npm audit fix`
+  bumped `svelte` (SSR XSS via spread attributes, ReDoS, DOM clobbering,
+  promise serialization) and `devalue` (DoS via sparse-array
+  deserialization) — both runtime-reachable, both fixed in-range. The
+  remaining 10 advisories (3 low, 7 moderate) are all dev tooling
+  (`vite 5`, `vitest 1`, `@vitest/coverage-v8 1`,
+  `@sveltejs/vite-plugin-svelte 4`, and the transitive `cookie` via
+  `@sveltejs/kit`). Fixes require semver-major bumps (vite → 8, vitest
+  → 4, plugin → 7) that we deliberately defer to keep the deploy
+  surface small. The vite/esbuild advisories all describe
+  dev-server-only attack vectors (cross-origin requests to a running
+  dev server) that don't apply to production builds. Revisit when
+  SvelteKit publishes a release that pins cookie >= 0.7.0, or in a
+  dedicated tooling-upgrade pass after deploy.
 - **Script runtime (from Phase 3):** Decide between `tsx` at runtime vs a
   pre-compile step for `scripts/*.ts` in the Docker image. Resolve in Phase 8.
   (Less urgent than before — the server's own boot path runs migrations via

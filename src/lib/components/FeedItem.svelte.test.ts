@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import FeedItem from './FeedItem.svelte';
 import type { Post } from '$lib/types';
 
@@ -9,9 +10,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function item(
-	over: Partial<Post> = {}
-): Post {
+function item(over: Partial<Post> = {}): Post {
 	return {
 		slug: 'hello',
 		body: 'body text',
@@ -24,105 +23,154 @@ function item(
 	};
 }
 
-describe('FeedItem admin behavior', () => {
-	it('admin=false: no Edit button in rail, body renders normally', () => {
-		const { container, queryByRole } = render(FeedItem, { props: { item: item() } });
-		expect(queryByRole('button', { name: 'Edit' })).toBeNull();
-		expect(container.querySelector('.body')).not.toBeNull();
-		expect(container.querySelector('form.post-form')).toBeNull();
-	});
-
-	it('admin=true read mode: Edit sits next to the permalink dateline, TagList below', () => {
-		const { container } = render(FeedItem, { props: { item: item(), admin: true } });
-		const head = container.querySelector('.rail .rail-head');
-		expect(head).not.toBeNull();
-		// Both the permalink-wrapped Dateline and the Edit button are children of rail-head
-		expect(head?.querySelector('a.permalink time')).not.toBeNull();
-		expect(head?.querySelector('button.rail-edit')).not.toBeNull();
-		// TagList is a sibling, not nested inside rail-head
-		const taglist = container.querySelector('.rail .tag-list, .rail ul');
-		if (taglist) expect(head?.contains(taglist)).toBe(false);
-	});
-
-	it('admin=true edit mode: rail hides Dateline and TagList, shows Save / Cancel / Insert image', async () => {
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item(), admin: true }
+describe('FeedItem', () => {
+	it('link post: external <a> on the heading with the link marker', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ title: 'DF', url: 'https://daringfireball.net' }) }
 		});
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-
-		const rail = container.querySelector('.rail') as HTMLElement;
-		expect(rail.querySelector('a.permalink')).toBeNull();
-		expect(rail.querySelector('.tag-list, ul')).toBeNull();
-		expect(rail.querySelector('button[type="submit"]')).not.toBeNull();
-		expect(rail.querySelector('button.cancel')).not.toBeNull();
-		expect(rail.querySelector('button.insert-image')).not.toBeNull();
+		const link = container.querySelector('.post--link h2 a') as HTMLAnchorElement;
+		expect(link.getAttribute('href')).toBe('https://daringfireball.net');
+		expect(link.getAttribute('target')).toBe('_blank');
+		expect(link.getAttribute('rel')).toContain('noopener');
+		expect(link.querySelector('.link-marker')?.textContent).toBe('➻');
 	});
 
-	it('rail Save button references the form via the form attribute', async () => {
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item(), admin: true }
+	it('titled post: heading without an external link', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ title: 'Hello', url: null }) }
 		});
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-
-		const form = container.querySelector('form.post-form') as HTMLFormElement;
-		const railSubmit = container.querySelector('.rail button[type="submit"]') as HTMLButtonElement;
-		expect(form.id).toBeTruthy();
-		expect(railSubmit.getAttribute('form')).toBe(form.id);
+		const h2 = container.querySelector('.post--titled h2');
+		expect(h2?.textContent?.trim()).toBe('Hello');
+		expect(h2?.querySelector('a')).toBeNull();
 	});
 
-	it('clicking Edit swaps the read view for a PostForm', async () => {
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item(), admin: true }
+	it('plain post: no heading, body only', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ title: null, url: null, body: 'just text' }) }
 		});
-		expect(container.querySelector('form.post-form')).toBeNull();
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-		expect(container.querySelector('form.post-form')).not.toBeNull();
-		expect(container.querySelector('.body')).toBeNull();
+		expect(container.querySelector('.post--plain')).not.toBeNull();
+		expect(container.querySelector('.post--plain h2')).toBeNull();
+		expect(container.querySelector('.post--plain p')?.textContent).toBe('just text');
 	});
 
-	it('Cancel in the rail returns to the read view', async () => {
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item(), admin: true }
+	it('rail: renders permalink-wrapped <time> and tag links', () => {
+		const { container } = render(FeedItem, {
+			props: {
+				item: item({
+					permalink: '/2026/01/15/hello',
+					tags: [
+						{ name: 'Food', slug: 'food' },
+						{ name: 'Travel', slug: 'travel' }
+					]
+				})
+			}
 		});
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-		expect(container.querySelector('form.post-form')).not.toBeNull();
-		await fireEvent.click(getByRole('button', { name: 'Cancel' }));
-		expect(container.querySelector('form.post-form')).toBeNull();
-		expect(container.querySelector('.body')).not.toBeNull();
-	});
-
-	it('Save updates the rendered body without a round-trip', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			new Response(JSON.stringify({ ok: true }), {
-				status: 200,
-				headers: { 'Content-Type': 'application/json' }
-			})
+		const permalink = container.querySelector('a.permalink') as HTMLAnchorElement;
+		expect(permalink.getAttribute('href')).toBe('/2026/01/15/hello');
+		expect(permalink.querySelector('time')).not.toBeNull();
+		const tagHrefs = Array.from(container.querySelectorAll('.rail a[href^="/tag/"]')).map((a) =>
+			a.getAttribute('href')
 		);
-		vi.stubGlobal('fetch', fetchMock);
-
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item({ body: 'original body' }), admin: true }
-		});
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-		const bodyTextarea = container.querySelector('textarea') as HTMLTextAreaElement;
-		await fireEvent.input(bodyTextarea, { target: { value: 'updated body' } });
-		await fireEvent.click(getByRole('button', { name: 'Save' }));
-
-		await Promise.resolve();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(container.querySelector('form.post-form')).toBeNull();
-		expect(container.querySelector('.body')?.textContent).toContain('updated body');
+		expect(tagHrefs).toEqual(['/tag/food', '/tag/travel']);
 	});
 
-	it('rail Insert image opens the upload modal', async () => {
-		const { container, getByRole } = render(FeedItem, {
-			props: { item: item(), admin: true }
+	it('lightbox: clicking a body <img> opens a dialog', async () => {
+		const { container } = render(FeedItem, {
+			props: {
+				item: item({
+					title: null,
+					url: null,
+					body: '![A loaf](https://images.test/x.webp)'
+				})
+			}
 		});
-		await fireEvent.click(getByRole('button', { name: 'Edit' }));
-		expect(container.querySelector('.upload-modal, [role="dialog"]')).toBeNull();
-		await fireEvent.click(getByRole('button', { name: 'Insert image' }));
-		expect(container.querySelector('.upload-modal, [role="dialog"]')).not.toBeNull();
+		const img = container.querySelector('.body img') as HTMLImageElement;
+		expect(img).not.toBeNull();
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		await fireEvent.click(img);
+		const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
+		expect(dialog).not.toBeNull();
+		expect(dialog.querySelector('img')?.getAttribute('src')).toBe('https://images.test/x.webp');
+	});
+
+	it('lightbox: on narrow screens, tapping a body <img> toggles is-tapped instead of opening a dialog', async () => {
+		vi.stubGlobal('matchMedia', (query: string) => ({
+			matches: query.includes('640'),
+			media: query,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+			addListener: () => {},
+			removeListener: () => {},
+			dispatchEvent: () => false,
+			onchange: null
+		}));
+		const { container } = render(FeedItem, {
+			props: {
+				item: item({
+					title: null,
+					url: null,
+					body: '![A loaf](https://images.test/x.webp)'
+				})
+			}
+		});
+		const img = container.querySelector('.body img') as HTMLImageElement;
+		await fireEvent.click(img);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(img.classList.contains('is-tapped')).toBe(true);
+		await fireEvent.click(img);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(img.classList.contains('is-tapped')).toBe(false);
+	});
+
+	it('lightbox: clicking a body <img> nested in <a> does not open a dialog', async () => {
+		const { container } = render(FeedItem, {
+			props: {
+				item: item({
+					title: null,
+					url: null,
+					body: '[![A loaf](https://images.test/x.webp)](https://example.test/post)'
+				})
+			}
+		});
+		const img = container.querySelector('.body img') as HTMLImageElement;
+		expect(img).not.toBeNull();
+		expect(img.closest('a')).not.toBeNull();
+		await fireEvent.click(img);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+	});
+
+	it('lightbox: pressing Escape closes the dialog', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		try {
+			const { container } = render(FeedItem, {
+				props: {
+					item: item({
+						title: null,
+						url: null,
+						body: '![A loaf](https://images.test/x.webp)'
+					})
+				}
+			});
+			const img = container.querySelector('.body img') as HTMLImageElement;
+			await fireEvent.click(img);
+			expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+			await fireEvent.keyDown(window, { key: 'Escape' });
+			await vi.advanceTimersByTimeAsync(300);
+			expect(document.querySelector('[role="dialog"]')).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('rail snippet: when provided, renders inside the rail', () => {
+		const railSnippet = createRawSnippet(() => ({
+			render: () => '<div data-testid="extra-rail">EXTRA</div>'
+		}));
+		const { container } = render(FeedItem, {
+			props: { item: item(), rail: railSnippet }
+		});
+		const extra = container.querySelector('.rail [data-testid="extra-rail"]');
+		expect(extra).not.toBeNull();
+		expect(extra?.textContent).toBe('EXTRA');
 	});
 });
