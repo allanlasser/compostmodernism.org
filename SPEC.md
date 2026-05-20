@@ -1195,6 +1195,15 @@ compostmodernism.org {
     request_body {
         max_size 20MB
     }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+www.compostmodernism.org {
+    redir https://compostmodernism.org{uri} permanent
 }
 ```
 
@@ -1204,6 +1213,14 @@ No host port is involved.
 
 `max_size 20MB` is required — without it Caddy rejects large image
 uploads before they reach SvelteKit.
+
+The `log` block sends access logs to the gateway container's stdout, so
+they surface in `docker logs gateway` alongside Caddy's own runtime
+logs. `format console` is human-readable (vs. the default JSON), which
+keeps tailing during incidents cheap.
+
+The `www.` site block is a 301 to the bare domain. Caddy provisions a
+second cert for `www.compostmodernism.org` automatically.
 
 ### One-time mount in the gateway
 

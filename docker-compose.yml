@@ -4,6 +4,10 @@ services:
     container_name: compostmodernism
     restart: unless-stopped
     env_file: .env
+    environment:
+      # adapter-node defaults to 512KB; raise to match Caddy's request_body
+      # max_size so image uploads aren't capped at the inner layer.
+      BODY_SIZE_LIMIT: 20971520
     volumes:
       - ./posts.db:/app/posts.db
     networks:

@@ -5,6 +5,74 @@ entries go on top.
 
 ---
 
+## adapter-node has its own body-size limit, separate from Caddy
+
+SvelteKit's `@sveltejs/adapter-node` enforces a request body limit
+*inside* the Node process, defaulting to **512 KB**, regardless of any
+upstream reverse-proxy config. Caddy's `request_body { max_size 20MB }`
+in the Caddyfile sets the *outer* gate; if the inner gate is smaller,
+adapter-node returns a 500 with
+`Content-length of N exceeds limit of 524288 bytes` before the route
+handler ever runs — and the response is unhelpfully a 500 (not 413),
+making the trail back to the limit easy to miss.
+
+Two limits, two layers, must be kept in sync:
+
+| Layer | Setting | Location |
+|---|---|---|
+| Reverse proxy | `request_body { max_size 20MB }` | `Caddyfile` |
+| Node runtime | `BODY_SIZE_LIMIT=20971520` | `docker-compose.yml` (env) |
+
+The Node limit is set as an env var in `docker-compose.yml`'s
+`environment:` block rather than `.env`, because it's repo-level config
+that has to match the Caddyfile, not a per-environment secret. Use
+`Infinity` to disable the inner limit entirely (only sensible if you
+trust the upstream proxy unconditionally — generally a bad idea).
+
+---
+
+## Single-file bind mounts are pinned by inode, not path
+
+The gateway mounts our Caddyfile as a single file:
+
+```
+~/sites/compostmodernism.org/Caddyfile:/etc/caddy/sites/compostmodernism.org.caddy:ro
+```
+
+Docker resolves that source path **once at container-create time** and
+captures the resulting inode. From then on, the container is bound to
+the inode, not the path. Editing tools (`git checkout`, `vim` with its
+default write-temp-then-rename behaviour, `sed -i`, etc.) almost always
+*replace* the file rather than modifying it in place, which means the
+host now has a *new* inode at the same path while the container keeps
+serving the old inode's content. `caddy reload` reads from inside the
+container, sees the old content, and dutifully reloads a no-op.
+
+Symptom: edit the host Caddyfile, run `caddy reload`, watch the change
+not take effect. `docker exec gateway cat /etc/caddy/sites/<site>.caddy`
+prints the *old* content even though `cat` on the host prints the new
+content — same path, different inodes, no warning anywhere.
+
+**Workaround until the gateway mount is restructured:** any time the
+Caddyfile changes on disk, run `docker restart gateway` (not
+`caddy reload`). The restart re-resolves the bind-mount source against
+the current path and picks up the new inode.
+
+**Proper fix (deferred):** the gateway should mount the *directory*
+containing per-site Caddyfiles, not each file individually. Directory
+mounts are re-traversed on every access, so inode swaps inside them
+propagate immediately. Restructuring requires moving each site's
+Caddyfile into its own subdirectory (so the gateway can mount a
+predictable layout) — out of scope while the gateway hosts unrelated
+projects.
+
+**Diagnostic shortcut:** if you suspect this, compare inodes —
+`stat -c '%i' ~/sites/compostmodernism.org/Caddyfile` on the host and
+`docker exec gateway stat -c '%i' /etc/caddy/sites/compostmodernism.org.caddy`.
+Different numbers means the mount is stale.
+
+---
+
 ## VPS is on Docker Compose v1, not v2
 
 On the deploy host (cornhill, Ubuntu 18.04), the only working invocation

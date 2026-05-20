@@ -5,4 +5,13 @@ compostmodernism.org {
 	request_body {
 		max_size 20MB
 	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+www.compostmodernism.org {
+	redir https://compostmodernism.org{uri} permanent
 }
