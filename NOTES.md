@@ -5,6 +5,27 @@ entries go on top.
 
 ---
 
+## Helpers exported from `+server.ts` must start with `_`
+
+Vitest happily imports `buildFeed` from a `+server.ts` file and the test
+suite goes green — but the first real request to that route 500s with
+`Invalid export 'buildFeed'`. SvelteKit only allows the HTTP method
+handlers (`GET`, `POST`, …), a small set of config exports
+(`prerender`, `trailingSlash`, `config`, `entries`, `fallback`), or
+*anything prefixed with `_`*. The validator runs at request time, not
+build time and not at type-check, so neither `npm test` nor `npm run
+check` catches it.
+
+Convention for this codebase: any helper you want to keep colocated in
+the route file but also import from a test — prefix it with `_` and
+re-alias on import (`import { _buildFeed as buildFeed } from './+server'`).
+
+Caught during Phase 15 (RSS feed) on the manual browser pass. Reinforces
+the standing rule that UI/route work isn't done until you've hit the
+route in a browser.
+
+---
+
 ## Inline editing was a tax we couldn't justify
 
 Phases 11, 11.1, and 12 added per-post inline Edit and an inline "+ New post"

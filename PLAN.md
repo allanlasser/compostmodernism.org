@@ -1048,6 +1048,81 @@ Captured here so the ideas aren't lost; not in scope for Phase 14.
 
 ---
 
+## Phase 15 — RSS Feed
+
+**Goal:** A full-text RSS 2.0 feed at `/feeds/posts.xml`, generated with the
+`feed` library. Each item carries `content:encoded` with the rendered post
+HTML. For link posts, `<link>` points to the external URL while `<guid>` is
+the canonical permalink — readers identify entries by permalink even when the
+click-through is external.
+
+Files touched:
+- `package.json` — add `feed` runtime dep
+- `src/routes/feeds/posts.xml/+server.ts` — new endpoint; exports `GET` and
+  a `_buildFeed(posts, siteUrl)` helper (underscore prefix is required by
+  SvelteKit's `+server.ts` export validator)
+- `src/routes/feeds/posts.xml/posts.test.ts` — unit tests covering all three
+  post types
+- `src/app.html` — `<link rel="alternate" type="application/rss+xml">` for
+  reader auto-discovery
+- `.env.example` — add `SITE_URL` with the canonical origin as default
+- `static/` — newly created directory; favicon and any other static assets
+  land here
+
+### Red → Green cycles
+
+#### Endpoint contract
+```
+test: GET returns 200 with Content-Type: application/rss+xml; charset=utf-8
+test: emits an RSS 2.0 channel skeleton (xml prolog, <rss>, <channel>, <title>)
+test: handles an empty post list (no <item>, channel still valid)
+```
+
+#### Post-type rendering (the requirements)
+```
+test: link post — <link> is external URL, <guid> is the permalink
+test: titled post — <link> and <guid> are both the permalink
+test: plain post (null title) — date-derived <title>, permalink for link + guid
+test: full-text content as HTML in content:encoded (marked output round-trips)
+test: items appear in the order getPosts() returned (newest first)
+test: trailing slash in SITE_URL is normalised
+test: tags emitted as <category> elements
+```
+
+### Design decisions
+
+- **Site origin is an env var, not `event.url.origin`.** Behind a reverse
+  proxy (Caddy), the request origin reported to adapter-node is whatever
+  proxy-header config the adapter is given — by default just
+  `http://localhost:3000`. RSS items need absolute URLs that don't drift
+  with the request, so the feed reads `$SITE_URL` (default
+  `https://compostmodernism.org`).
+- **`_buildFeed` over `GET` for testability.** The `_` prefix is mandatory:
+  SvelteKit's route-export validator rejects anything else at request time.
+  See NOTES.md for the gotcha — vitest + svelte-check both let
+  non-prefixed exports through.
+- **Full-text feed.** No truncation; `marked` is already rendering the same
+  HTML for the on-site post pages, so the bytes are identical.
+- **`<guid isPermaLink="false">`.** The `feed` library sets this attribute
+  automatically when `guid` is passed explicitly. The permalink IS a real
+  URL, but treating the GUID as opaque identity (not a fetchable link) is
+  the safer convention — readers won't try to refetch the permalink to
+  resolve duplicates, they'll just match the string.
+
+### Checkpoint
+
+- [x] All 10 new tests green
+- [x] Full suite green (308 tests pass)
+- [x] `npm run check` clean
+- [x] Manual browser pass: `curl /feeds/posts.xml` returns 200 with seeded
+      posts; the link post (`Why I love Svelte`) carries
+      `<link>https://svelte.dev/blog/runes</link>` paired with
+      `<guid>…/why-i-love-svelte</guid>`
+- [x] `<link rel="alternate" …>` present on `/` and single-post pages
+- [ ] Favicon dropped into `static/favicon.png` (user-supplied)
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

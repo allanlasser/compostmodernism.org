@@ -19,6 +19,7 @@ This file is the architectural overview — what the running app actually is.
 | Image pipeline | `sharp` — EXIF stripped, max 1600×1600, converted to WebP |
 | Object storage | Cloudflare R2 via `@aws-sdk/client-s3` (images + nightly DB backups) |
 | Markdown | `marked` (rendered server-side at request time) |
+| RSS | `feed` — full-text RSS 2.0 at `/feeds/posts.xml` |
 | Validation | `zod` `safeParse` on every API route |
 | Tests | `vitest` + `@testing-library/svelte` + `happy-dom`, 150+ tests across the codebase |
 | Container | Docker + Docker Compose (no host ports — joins external `web` network) |
@@ -45,6 +46,7 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
 │   │   ├── tag/[slug]/                    # Tag feed
 │   │   ├── admin/                         # Login, posts table + new/edit pages, images table
+│   │   ├── feeds/posts.xml/+server.ts     # GET — RSS 2.0 (full-text)
 │   │   └── api/
 │   │       ├── post/+server.ts            # POST  — create
 │   │       ├── post/[slug]/+server.ts     # PATCH — edit
@@ -59,6 +61,7 @@ This file is the architectural overview — what the running app actually is.
 │   └── fixtures.ts
 ├── migrations/
 │   └── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
+├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
 ├── Caddyfile                     # reverse_proxy compostmodernism:3000 — mounted into the gateway
@@ -290,6 +293,21 @@ Records the resulting key in the `images` ledger.
 | 200 | `{ ok: true, url: string }` | Bytes uploaded to the *same* R2 key; `uploaded_at` bumped. `url` is unchanged from the prior version, so posts referencing the image stay intact. |
 
 **Request body:** `multipart/form-data` with an `image` file field.
+
+### `GET /feeds/posts.xml`
+
+Full-text RSS 2.0 feed of every post returned by `getPosts()` (default 50,
+reverse-chronological). For link posts, `<link>` is the external URL and
+`<guid>` is the canonical permalink — so a reader's identity for the entry
+survives renames, while clicking through still goes to the source.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 200 | `application/rss+xml` body | Always |
+
+The site origin used to build absolute URLs is `$SITE_URL` (defaulting to
+`https://compostmodernism.org`). Discoverable from any page via
+`<link rel="alternate" type="application/rss+xml">` in `app.html`.
 
 ## Admin UI
 
