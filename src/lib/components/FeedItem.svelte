@@ -178,6 +178,7 @@
 
 	.post--titled h2,
   .post--link h2 {
+    font-style: italic;
 		font-size: var(--size-lede);
 		line-height: 1.4;
 	}
