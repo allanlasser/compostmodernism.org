@@ -826,8 +826,10 @@ export async function POST({ request, cookies }) {
 > - `src/routes/admin/+layout.server.ts` redirects unauthenticated requests to
 >   `/admin/login` and otherwise returns `{ authed: true }`. The login route is
 >   the only `/admin/*` path that loads without a session.
-> - `src/routes/admin/+layout.svelte` renders `AdminNav` (Posts / Images / Sign
->   out) when `data.authed`. Sign out hits `DELETE /api/session`.
+> - `src/routes/admin/+layout.svelte` renders `AdminNav` (Posts / Images
+>   links) when `data.authed`. The Sign out button lives in the root
+>   `+layout.svelte` site header (visible site-wide when `data.admin` is true)
+>   and hits `DELETE /api/session`.
 > - `src/routes/admin/+page.server.ts` is now a redirect to `/admin/posts` —
 >   there is no `+page.svelte` under `/admin/`.
 > - `src/routes/admin/posts/+page.svelte` renders `<PostsTable>` against a

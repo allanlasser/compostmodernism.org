@@ -21,10 +21,11 @@ const data = {
 };
 
 describe('admin edit-post page', () => {
-	it('renders the edit header and a back link to /admin/posts', () => {
+	it('renders the edit header with the post permalink', () => {
 		const { getByText, container } = render(Page, { props: { data } });
 		expect(getByText('Edit post')).not.toBeNull();
-		expect(container.querySelector('a[href="/admin/posts"]')).not.toBeNull();
+		const permalink = container.querySelector(`a[href="${data.post.permalink}"]`);
+		expect(permalink).not.toBeNull();
 	});
 
 	it('renders a permalink link to the public post', () => {

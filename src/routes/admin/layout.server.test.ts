@@ -9,7 +9,8 @@ import { load } from './+layout.server';
 function makeEvent(pathname: string, session?: string) {
 	return {
 		cookies: { get: vi.fn().mockReturnValue(session) },
-		url: new URL(`http://localhost${pathname}`)
+		url: new URL(`http://localhost${pathname}`),
+		request: new Request(`http://localhost${pathname}`)
 	};
 }
 

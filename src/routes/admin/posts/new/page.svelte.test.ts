@@ -29,7 +29,7 @@ describe('admin new-post page', () => {
 		const { container, getByRole } = render(Page);
 		const body = container.querySelector('textarea') as HTMLTextAreaElement;
 		await fireEvent.input(body, { target: { value: 'a new post' } });
-		await fireEvent.click(getByRole('button', { name: 'Post' }));
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
 
 		// Wait microtasks for fetch + onSuccess.
 		await Promise.resolve();

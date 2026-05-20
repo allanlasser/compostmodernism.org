@@ -5,6 +5,28 @@ entries go on top.
 
 ---
 
+## Inline editing was a tax we couldn't justify
+
+Phases 11, 11.1, and 12 added per-post inline Edit and an inline "+ New post"
+composer to the public feed. Two commits in (`efa8c24`, `5875b3c`), the cost
+shape became obvious: `FeedItem` carried two render paths (read view + form),
+`PostForm` grew five extra props (`onCancel`, `hideActions`, `formId`, plus
+bindable `imageModalOpen` / `submitting` / `saved`), and the home page held
+mutable feed state seeded via `untrack` to survive prop refreshes. Every
+public-route component had to know about admin mode.
+
+Commit `7d50b6f` ripped it out. Hosts now just link to
+`/admin/posts/[slug]` and `/admin/posts/new`. The standalone admin pages
+already render a `<PostForm>` and already handle every edge case (validation,
+slug rename, delete, image upload). For the volume of editing this site sees,
+one extra click is not a problem worth that much code.
+
+If you find yourself reaching for inline editing again: measure the editing
+volume first, and budget for the test churn (the rollback deleted ~7
+component tests that were specifically about admin-aware rendering).
+
+---
+
 ## Slug redirects point to `post_id`, not to a path string
 
 `slug_redirects` rows store `(old_year, old_month, old_day, old_slug, post_id)`

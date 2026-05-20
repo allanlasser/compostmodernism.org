@@ -737,174 +737,35 @@ Checkpoint 10.1:
 
 ---
 
-## Phase 11 — Inline Edit Affordances on Public Routes
+## Phases 11, 11.1, 12 — Inline Edit / Compose (rolled back)
 
-**Goal:** When a session is active, surface edit affordances inside the
-read view itself so single-clicking through to the admin route is no longer
-required for routine tweaks. The public chrome stays identical for
-unauthenticated readers.
+These three phases — per-post inline Edit, the rail-chrome split, and
+the inline "+ New post" composer on the feed — were built (commits
+`efa8c24`, `5875b3c`) and then reverted in commit `7d50b6f`
+("Clean up code and frontend").
 
-### Design
+**Why rolled back.** Plain links to `/admin/posts/[slug]` and
+`/admin/posts/new` proved sufficient in practice. The inline affordances
+added per-component state, multiple bindable props on `PostForm`, and a
+parallel render path inside `FeedItem` — overkill for the editing volume
+involved, and a maintenance tax on every future change to the public
+read view.
 
-- The per-post `<aside class="rail">` (already present in `FeedItem` and the
-  single-post page) gains an "Edit" button when `admin` is true. Clicking
-  swaps the rendered title + body block for an inline
-  `<PostForm mode="edit">` and supplies a Cancel that returns to the read
-  view. Each post owns its own draft via the form's existing `untrack`
-  capture — multiple posts can be in edit mode at once without conflict.
-- `PostForm` gains an optional `onCancel` prop (renders a Cancel button
-  beside Save when provided) and its `onSuccess` is enriched to pass the
-  parsed payload alongside the slug, so the host can update its local copy
-  without a refetch.
-- An `<ImageUploadModal>` component is reachable from inside `PostForm` via
-  an "Insert image" toolbar button under the body textarea. The modal
-  hits the existing `/api/upload` endpoint and on success splices
-  `![](url)` into the textarea at the caret position.
-- The site header rail gains a "+ New post" link (next to the existing
-  "Admin" link) that navigates to `/admin/posts/new`. A modal-based
-  composer is deliberately deferred.
+**What survives:**
 
-### Files
+- `PostForm.svelte` keeps `imageModalOpen` / `submitting` / `saved` as
+  bindable props (harmless), the slug input (used by Phase 13's rename),
+  and the Insert-image modal flow.
+- `ImageUploadModal.svelte` stays in use from the standalone admin
+  edit/create pages.
+- `FeedItem.svelte` is back to a simple `{ item, rail? }` component; the
+  single-post page uses the `rail` snippet to inject an admin "Edit" link
+  when `page.data.admin` is true.
+- Tests were rewritten in the same sweep to describe the simpler
+  components (see commit history around the rollback).
 
-- `src/lib/components/admin/PostForm.svelte` — added `onCancel`, enriched
-  `onSuccess`, body-toolbar Insert image button (placed *outside* the
-  Body `<label>` to keep its accessible name clean), modal mounting.
-- `src/lib/components/admin/ImageUploadModal.svelte` *(new)* — overlay
-  with file picker, calls `/api/upload`, invokes `onInsert(url)` on
-  success.
-- `src/lib/components/FeedItem.svelte` — new `admin` prop, local mutable
-  `post` state, rail Edit toggle, inline `PostForm` swap, `onSaved`
-  handler that maps the form's `tags: string[]` payload back to
-  `{ name, slug }` via `slugify`.
-- `src/routes/[year]/[month]/[day]/[slug]/+page.svelte` — same treatment
-  as `FeedItem` but rendered directly by the page (h1 sizing differs).
-- `src/routes/+page.svelte`, `src/routes/tag/[slug]/+page.svelte` — read
-  `admin` from `$app/state` and forward to `<FeedItem>`.
-- `src/routes/+layout.svelte` — added "+ New post" link.
-
-### Tests
-
-- `PostForm.svelte.test.ts` — Cancel renders only with callback;
-  onSuccess passes payload; Insert image opens modal and splices URL
-  into body at the cursor.
-- `ImageUploadModal.svelte.test.ts` *(new)* — picker + upload roundtrip;
-  failure surfaces error; Cancel closes.
-- `FeedItem.svelte.test.ts` *(new)* — admin=false hides Edit; admin=true
-  shows it; click swaps to form; Cancel reverts; Save updates the
-  rendered body.
-- `[year]/[month]/[day]/[slug]/page.svelte.test.ts` — same admin matrix
-  for the single-post page, with `$app/state` mocked.
-- `layout.svelte.test.ts` — "+ New post" link visibility tracks
-  `data.admin`.
-
-### Checkpoint 11
-
-- [x] `npm test` — 258 tests green
-- [x] `npm run check` — 0 errors / 0 warnings
-- [ ] Manual: sign in; from the feed, click Edit on a post → form
-      appears in place; toggle Insert image, upload a file, confirm the
-      markdown is spliced at the caret; Save and see the new body
-      rendered without navigation; Cancel and confirm the read view
-      returns intact; verify the same flow on a permalink page.
-
-### Phase 11.1 — Rail chrome adjustments
-
-**Goal:** Tighten the inline-edit affordance so the rail tells the
-truth about state. Three changes:
-
-1. In read mode, the rail's Edit button sits inline next to the
-   permalink dateline (no top-border divider); the tag list drops
-   to its own row below.
-2. In edit mode, the rail swaps its metadata cluster (dateline +
-   tags) for the form's controls — Save, Cancel, Insert image —
-   so the only visible affordances belong to the form.
-3. The admin posts table loses its trailing actions column; the
-   title link already routes to the edit page, and View + Delete
-   are reachable from there.
-
-**Design notes:**
-
-- `PostForm` gains `hideActions`, `formId`, and bindable
-  `imageModalOpen` / `submitting` / `saved` props. With
-  `hideActions` the form does not render its toolbar or actions
-  row; the host is expected to render external buttons. The
-  external submit button targets the form via the HTML
-  `form="<id>"` attribute, preserving native form-submission
-  semantics. The modal and busy/saved state remain owned by
-  `PostForm` but are exposed via `$bindable` so the rail's UI
-  can stay in sync.
-- `FeedItem` and `[year]/[month]/[day]/[slug]/+page.svelte` adopt
-  the same `.rail-head` / `.rail-actions` split.
-
-**Tests:**
-
-- `FeedItem.svelte.test.ts` — read mode: `.rail-head` contains
-  both the permalink-wrapped Dateline and the Edit button; tag
-  list is a sibling. Edit mode: rail has no Dateline, no tag
-  list, and three buttons (`[type=submit]`, `.cancel`,
-  `.insert-image`); the submit button's `form` attribute matches
-  the form's `id`. Insert image opens the modal.
-- `[year]/[month]/[day]/[slug]/page.svelte.test.ts` — mirrors
-  the FeedItem rail tests for the single-post page.
-- `PostsTable.svelte.test.ts` — explicitly asserts the absence of
-  the actions column / View link / Edit link / Delete button.
-
-### Checkpoint 11.1
-
-- [x] `npm test` — green for changed suites
-- [x] `npm run check` — 0 errors / 0 warnings
-- [x] Manual (Playwright): home feed in admin mode shows Edit
-      next to dateline; clicking Edit swaps the rail to
-      Save/Cancel/Insert image; the admin posts table has three
-      columns with no action affordances.
-
----
-
-## Phase 12 — Inline New Post on the Feed
-
-**Goal:** Symmetric counterpart to Phase 11's per-post Edit. When admin,
-the home feed gains a "+ New post" toggle at the top; clicking reveals
-`<PostForm mode="create">` in an article-shaped slot above the first
-post; saving prepends the new post to the feed and closes the composer,
-no navigation. The single `PostForm` component is reused — no API or
-schema changes.
-
-### Design
-
-- `src/routes/+page.svelte` is the only host (tag pages skipped: a new
-  post may not match the active tag filter, which would be confusing).
-- Local mutable `feed` state seeded from `data.feed` via `untrack` so
-  re-renders that supply a new `data` prop don't clobber prepended
-  drafts.
-- After save, the new feed item's `date` uses `Date.now()` and its
-  `permalink` is derived via `$lib/slug`'s `permalink({ slug,
-  created_at })` — the same helper the server uses, so the value matches
-  what'll show on the next full page load (subject to the obvious
-  client-server clock skew on the date stamp, which is sub-second).
-- The composer renders inside an `<article class="post post--compose">`
-  with the same grid as ordinary posts; its `<aside class="rail">` is
-  empty (and `aria-hidden`) so the visual column lines up but no
-  metadata is implied for the unsaved post.
-- The header's "+ New post" link is unchanged — it still navigates to
-  `/admin/posts/new` from any page. The two affordances coexist; if it
-  proves redundant on the feed in practice, hide one via
-  `page.url.pathname` in a follow-up.
-
-### Tests
-
-`src/routes/page.svelte.test.ts` — admin matrix: toggle hidden when
-not authed; visible when authed; click reveals an inline form; Cancel
-collapses it; a successful POST prepends the new post and removes the
-composer.
-
-### Checkpoint 12
-
-- [x] `npm test` — 262 tests green
-- [x] `npm run check` — 0 errors / 0 warnings
-- [ ] Manual: sign in, on the home feed click "+ New post", compose a
-      titled post with a tag, Save, confirm the new post appears at
-      position 1 of the feed without navigation; cancel a different
-      composer mid-typing and confirm no leftover state remains.
+**Lesson logged in NOTES.md:** inline editing is a feature whose cost
+shows up later — in test churn and prop sprawl — not at first sight.
 
 ---
 

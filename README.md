@@ -37,13 +37,14 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── markdown.ts      # marked wrapper used by feed + post pages
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
-│   │   └── components/      # FeedItem, Dateline, TagList
+│   │   ├── schemas.ts       # Shared zod schemas (postInputSchema, postUpdateSchema, imageMetadataSchema)
+│   │   └── components/      # FeedItem, Dateline, TagList + admin/ (PostForm, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
 │   ├── routes/
 │   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection
 │   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
 │   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
 │   │   ├── tag/[slug]/                    # Tag feed
-│   │   ├── admin/                         # Login form + post list + image uploader
+│   │   ├── admin/                         # Login, posts table + new/edit pages, images table
 │   │   └── api/
 │   │       ├── post/+server.ts            # POST  — create
 │   │       ├── post/[slug]/+server.ts     # PATCH — edit
@@ -79,11 +80,11 @@ This file is the architectural overview — what the running app actually is.
 2. **Read** — the feed loader calls `getPosts` (default limit 50, reverse-chronological,
    hydrated with `tags` and a `date` alias). Each post is rendered by `FeedItem.svelte`,
    which switches on link/titled/plain.
-3. **Edit** — `/admin/posts/[slug]` (or the inline editor from the feed) issues
-   `PATCH /api/post/[slug]`. Omitted fields keep their old values; the body re-runs
-   `setPostImages` to rebuild image join rows. A slug *can* be changed: the old
-   `(year, month, day, slug)` tuple is recorded in `slug_redirects` and the
-   single-post loader 301s old URLs to the post's new canonical path on next visit.
+3. **Edit** — `/admin/posts/[slug]` issues `PATCH /api/post/[slug]`. Omitted fields
+   keep their old values; the body re-runs `setPostImages` to rebuild image join
+   rows. A slug *can* be changed: the old `(year, month, day, slug)` tuple is
+   recorded in `slug_redirects` and the single-post loader 301s old URLs to the
+   post's new canonical path on next visit.
 4. **Archive** — nightly cron runs `scripts/export-and-backup.ts`: writes
    `archive/YYYY/MM/DD/slug.md` with YAML frontmatter for every post (idempotent —
    re-runs overwrite), then `PutObject`s `posts.db` to R2 under
@@ -301,14 +302,17 @@ After signing in at `/admin/login`, the admin area exposes:
 
 Both posting channels share the same backend: the admin UI uses `fetch` against the same API endpoints that iOS Shortcuts hit.
 
-When signed in, the public site itself gains lightweight admin affordances:
+When signed in, the public site shows two extra affordances (gated on the
+root layout's `data.admin` flag, so unauthenticated readers see nothing
+different):
 
-- The site header byline gets a "+ New post" link beside "Admin" (navigates to `/admin/posts/new`).
-- The home feed also gets an inline "+ New post" toggle at the top. Clicking it reveals a `PostForm` in compose mode in place; saving prepends the new post to the feed without navigation.
-- Every post in the feed and on its permalink page gets an "Edit" link in its right-hand rail. Clicking it replaces the rendered title + body in place with the `PostForm` (Save / Cancel / Insert image). Saving updates the rendered post without leaving the page; each post owns its own draft.
-- Inside `PostForm`, "Insert image" opens a modal that uploads via `POST /api/upload` and splices the returned URL into the body at the cursor.
+- The site header gains an "Admin" link and a "Sign out" button in place of
+  the byline.
+- Each single-post page shows an "Edit" link in its right-hand rail that
+  jumps to `/admin/posts/[slug]`.
 
-None of these affordances are visible to unauthenticated readers — they show only when the layout's `data.admin` flag is true.
+Inline edit affordances on the feed and inline composer were tried and
+rolled back; see `NOTES.md` for the post-mortem.
 
 ## References
 

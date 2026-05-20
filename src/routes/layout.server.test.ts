@@ -7,7 +7,10 @@ vi.mock('$env/dynamic/private', () => ({
 import { load } from './+layout.server';
 
 function makeEvent(session?: string) {
-	return { cookies: { get: vi.fn().mockReturnValue(session) } };
+	return {
+		cookies: { get: vi.fn().mockReturnValue(session) },
+		request: new Request('http://localhost/')
+	};
 }
 
 describe('root layout loader', () => {

@@ -20,7 +20,7 @@ describe('PostForm', () => {
 	it('blocks submit and surfaces an error when body is empty', async () => {
 		const fetchMock = stubFetchOk();
 		const { container, getByRole } = render(PostForm, { props: { mode: 'create' } });
-		await fireEvent.click(getByRole('button', { name: 'Post' }));
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
 		expect(container.querySelector('.field-error')).not.toBeNull();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
@@ -33,7 +33,7 @@ describe('PostForm', () => {
 		// Inputs in order: title, url, tags. Set url + body but leave title empty.
 		await fireEvent.input(inputs[1], { target: { value: 'https://example.com' } });
 		await fireEvent.input(textareas[0], { target: { value: 'commentary' } });
-		await fireEvent.click(getByRole('button', { name: 'Post' }));
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
 		expect(getByText(/link post needs a title/i)).not.toBeNull();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
@@ -49,7 +49,7 @@ describe('PostForm', () => {
 		await fireEvent.input(titleInput, { target: { value: 'Hello' } });
 		await fireEvent.input(tagsInput, { target: { value: 'food, travel' } });
 		await fireEvent.input(bodyTextarea, { target: { value: 'A post.' } });
-		await fireEvent.click(getByRole('button', { name: 'Post' }));
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			'/api/post',
@@ -86,25 +86,6 @@ describe('PostForm', () => {
 				body: expect.stringContaining('"body":"new body"')
 			})
 		);
-	});
-
-	it('renders a Cancel button when onCancel is provided and calls it on click', async () => {
-		const onCancel = vi.fn();
-		const { getByRole } = render(PostForm, {
-			props: { mode: 'edit', initial: { slug: 's', body: 'b' }, onCancel }
-		});
-		await fireEvent.click(getByRole('button', { name: 'Cancel' }));
-		expect(onCancel).toHaveBeenCalled();
-	});
-
-	it('does not render a Cancel button when onCancel is omitted', () => {
-		const { container } = render(PostForm, {
-			props: { mode: 'edit', initial: { slug: 's', body: 'b' } }
-		});
-		const buttons = Array.from(container.querySelectorAll('button')).map((b) =>
-			b.textContent?.trim()
-		);
-		expect(buttons).not.toContain('Cancel');
 	});
 
 	it('Insert image opens modal; on insert, splices ![](url) into the body at cursor', async () => {
