@@ -8,6 +8,7 @@
 		url: string | null;
 		tags: { name: string; slug: string }[];
 		permalink: string;
+		shortlink: string;
 		date: number;
 	}
 
@@ -22,6 +23,7 @@
 	<h1>Edit post</h1>
   <p class="meta">
     <a href={data.post.permalink} target="_blank" rel="noopener noreferrer">{data.post.permalink}</a>
+    · <a href={data.post.shortlink} target="_blank" rel="noopener noreferrer">{data.post.shortlink}</a>
     · <time datetime={new Date(data.post.date).toISOString()}>
       {new Date(data.post.date).toLocaleDateString()}
     </time>

@@ -16,6 +16,7 @@ const data = {
 		url: null,
 		tags: [{ name: 'food', slug: 'food' }],
 		permalink: '/2026/01/15/hello',
+		shortlink: 'https://cmpst.org/p/abcd',
 		date: Date.UTC(2026, 0, 15)
 	}
 };
@@ -33,6 +34,16 @@ describe('admin edit-post page', () => {
 		const link = container.querySelector('a[href="/2026/01/15/hello"]') as HTMLAnchorElement;
 		expect(link).not.toBeNull();
 		expect(link.target).toBe('_blank');
+	});
+
+	it('renders a shortlink alongside the permalink', () => {
+		const { container } = render(Page, { props: { data } });
+		const link = container.querySelector(
+			`a[href="${data.post.shortlink}"]`
+		) as HTMLAnchorElement;
+		expect(link).not.toBeNull();
+		expect(link.target).toBe('_blank');
+		expect(link.textContent).toBe(data.post.shortlink);
 	});
 
 	it('renders a PostForm pre-filled from the post', () => {

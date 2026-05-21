@@ -48,6 +48,36 @@ describe('schema', () => {
 		expect(() => insert.run(2026, 5, 19, 'foo', id)).toThrow(/UNIQUE/);
 	});
 
+	it('creates shortlink_redirects table', () => {
+		const names = (
+			db.raw
+				.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+				.all() as { name: string }[]
+		).map((t) => t.name);
+		expect(names).toContain('shortlink_redirects');
+	});
+
+	it('shortlink_redirects enforces UNIQUE on old_token', () => {
+		const { id } = db.insertPost({ body: 'b', title: 'a' });
+		const insert = db.raw.prepare(
+			'INSERT INTO shortlink_redirects (old_token, post_id) VALUES (?, ?)'
+		);
+		insert.run('abcd', id);
+		expect(() => insert.run('abcd', id)).toThrow(/UNIQUE/);
+	});
+
+	it('post deletion cascades to shortlink_redirects', () => {
+		const { slug, id } = db.insertPost({ body: 'b', title: 'a' });
+		db.raw
+			.prepare('INSERT INTO shortlink_redirects (old_token, post_id) VALUES (?, ?)')
+			.run('abcd', id);
+		db.deletePost(slug);
+		const row = db.raw
+			.prepare('SELECT COUNT(*) AS n FROM shortlink_redirects WHERE post_id = ?')
+			.get(id) as { n: number };
+		expect(row.n).toBe(0);
+	});
+
 	it('post deletion cascades to slug_redirects', () => {
 		const { slug, id } = db.insertPost({ body: 'b', title: 'a' });
 		db.raw
@@ -539,6 +569,63 @@ describe('getPostByOldPath (Phase 13)', () => {
 				slug: oldSlug
 			})
 		).toBeNull();
+	});
+});
+
+describe('getPostById', () => {
+	it('returns the hydrated post for a known id', () => {
+		const { id, slug } = db.insertPost({ body: 'b', title: 'Hello' });
+		const found = db.getPostById(id);
+		expect(found?.id).toBe(id);
+		expect(found?.slug).toBe(slug);
+		expect(found?.title).toBe('Hello');
+	});
+
+	it('returns null for an unknown id', () => {
+		expect(db.getPostById(999999)).toBeNull();
+	});
+});
+
+describe('shortlink redirects', () => {
+	it('recordShortlinkRedirect + getPostByOldToken round-trip returns the current post', () => {
+		const { id } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.recordShortlinkRedirect('legacyTok', id);
+
+		const found = db.getPostByOldToken('legacyTok');
+		expect(found?.id).toBe(id);
+		expect(found?.title).toBe('Hello');
+	});
+
+	it('getPostByOldToken returns the renamed post (resolution follows the current canonical)', () => {
+		const { slug: oldSlug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.recordShortlinkRedirect('legacyTok', id);
+		db.updatePost(oldSlug, { body: 'b', slug: 'greetings' });
+
+		const found = db.getPostByOldToken('legacyTok');
+		expect(found?.id).toBe(id);
+		expect(found?.slug).toBe('greetings');
+	});
+
+	it('recordShortlinkRedirect is idempotent (ON CONFLICT DO NOTHING)', () => {
+		const { id } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.recordShortlinkRedirect('tok', id);
+		expect(() => db.recordShortlinkRedirect('tok', id)).not.toThrow();
+
+		const count = db.raw
+			.prepare('SELECT COUNT(*) AS n FROM shortlink_redirects WHERE old_token = ?')
+			.get('tok') as { n: number };
+		expect(count.n).toBe(1);
+	});
+
+	it('getPostByOldToken returns null when no row matches', () => {
+		expect(db.getPostByOldToken('never-frozen')).toBeNull();
+	});
+
+	it('getPostByOldToken returns null when the target post was deleted (cascade)', () => {
+		const { slug, id } = db.insertPost({ body: 'b', title: 'Hello' });
+		db.recordShortlinkRedirect('tok', id);
+		db.deletePost(slug);
+		expect(db.getPostByOldToken('tok')).toBeNull();
 	});
 });
 

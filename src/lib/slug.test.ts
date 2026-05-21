@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, dateParts, permalink } from './slug';
+import { slugify, dateParts, permalink, shortlink, SHORT_URL_BASE } from './slug';
 import { hashSlug } from './hash';
+import { decodeId } from './shortid';
 
 describe('slugify', () => {
 	it('lowercases and hyphenates', () => {
@@ -67,5 +68,23 @@ describe('permalink', () => {
 
 	it('builds a path from an untitled post (hash slug)', () => {
 		expect(permalink({ slug: 'a3b4c5d6', created_at })).toBe('/2024/07/01/a3b4c5d6');
+	});
+});
+
+describe('shortlink', () => {
+	it('builds a cmpst.org URL with an encoded id token', () => {
+		const url = shortlink({ id: 42 });
+		expect(url.startsWith(`${SHORT_URL_BASE}/p/`)).toBe(true);
+	});
+
+	it('encodes the id such that the token round-trips back to the same id', () => {
+		const id = 12345;
+		const url = shortlink({ id });
+		const token = url.slice(`${SHORT_URL_BASE}/p/`.length);
+		expect(decodeId(token)).toBe(id);
+	});
+
+	it('uses https://cmpst.org as the base', () => {
+		expect(SHORT_URL_BASE).toBe('https://cmpst.org');
 	});
 });

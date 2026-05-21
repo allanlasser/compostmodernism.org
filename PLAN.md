@@ -1123,6 +1123,129 @@ test: tags emitted as <category> elements
 
 ---
 
+## Phase 16 — Short URL Service
+
+**Goal:** Per-post short URLs at `https://cmpst.org/p/[token]` that 301 to
+the post's current canonical permalink. Cloudflare rewrites
+`cmpst.org/p/*` → `compostmodernism.org/p/*` at the edge, so the app only
+ever serves the canonical host. Tokens are Sqids-encoded forms of `posts.id`
+— reversible and opaque (no visible sequential order). A
+`shortlink_redirects` table backs migrations of the Sqids encoder config,
+mirroring the Phase 13 slug-redirect pattern.
+
+Files touched:
+- `package.json` — add `sqids` runtime dep
+- `src/lib/shortid.ts` — `encodeId` / `decodeId` wrapping Sqids with a
+  frozen alphabet (`a-z` minus `l`/`o`, `A-Z` minus `I`/`O`, `2-9`) and
+  `minLength: 4`
+- `src/lib/shortid-freeze.ts` — `freezeShortlinkTokens(db)`: walks every
+  post and persists its current token into `shortlink_redirects`
+- `src/lib/slug.ts` — `SHORT_URL_BASE` constant + `shortlink(post)`
+  returning `${SHORT_URL_BASE}/p/${encodeId(post.id)}`
+- `src/lib/db.ts` — `getPostById`, `getPostByOldToken`,
+  `recordShortlinkRedirect` (parallels of `getPostBySlug`,
+  `getPostByOldPath`, `recordSlugRedirect`)
+- `migrations/003_shortlink_redirects.sql` — `(old_token UNIQUE, post_id
+  ON DELETE CASCADE)`
+- `src/routes/p/[token]/+server.ts` — `GET` handler: decode → `getPostById`
+  → fall back to `getPostByOldToken` → 301 to `permalink(post)` or 404
+- `scripts/freeze-shortlink-tokens.ts` — CLI wrapper around
+  `freezeShortlinkTokens` for operators
+- `src/routes/admin/posts/[slug]/+page.{server.ts,svelte}` — return
+  `shortlink` alongside `permalink` and render it in the edit-header meta
+- Co-located tests for each of the above
+
+### Red → Green cycles
+
+#### Encoder (`src/lib/shortid.test.ts`)
+```
+test: encodeId produces a short alphanumeric string of length >= minLength
+test: encodeId avoids confusable glyphs (l/I/o/O/0/1)
+test: encodeId is deterministic and 1:1 across 500 ids
+test: decodeId round-trips encodeId across a range of ids
+test: decodeId returns null for empty, garbage, or out-of-alphabet tokens
+test: decodeId rejects tokens that decode to multi-value or non-positive
+```
+
+#### Shortlink utility (`src/lib/slug.test.ts`)
+```
+test: shortlink builds a cmpst.org URL with an encoded id token
+test: the token round-trips back to the same id via decodeId
+test: SHORT_URL_BASE === 'https://cmpst.org'
+```
+
+#### Schema + db functions (`src/lib/db.test.ts`)
+```
+test: schema — shortlink_redirects table exists
+test: schema — UNIQUE constraint on old_token
+test: schema — post delete cascades to shortlink_redirects
+test: recordShortlinkRedirect + getPostByOldToken round-trip
+test: getPostByOldToken returns the renamed post (follows current canonical)
+test: recordShortlinkRedirect is idempotent (ON CONFLICT DO NOTHING)
+test: getPostByOldToken returns null when nothing matches
+test: getPostByOldToken returns null after the target post is deleted
+test: getPostById round-trip + null on miss
+```
+
+#### Endpoint (`src/routes/p/[token]/server.test.ts`)
+```
+test: valid current token → 301 to canonical permalink
+test: garbage token that does not decode → 404
+test: decoded but post missing → falls back, then 404
+test: garbage token that matches a shortlink_redirects entry → 301
+test: decoded-and-missing token that has a frozen redirect → 301 via fallback
+```
+
+#### Freeze (`src/lib/shortid-freeze.test.ts`)
+```
+test: writes one shortlink_redirects row per post with the current token
+test: idempotent — re-running does not duplicate or throw
+test: returns 0 when there are no posts
+```
+
+#### Admin display (`src/routes/admin/posts/[slug]/page.svelte.test.ts`)
+```
+test: renders a shortlink anchor alongside the permalink in the meta line
+```
+
+### Design decisions
+
+- **Sqids over raw autoincrement.** Raw `posts.id` in the URL would
+  telegraph the post count and relative recency. Sqids hides both while
+  remaining reversible (no second lookup table needed for normal
+  resolution). Base36 was the simpler zero-dep alternative but preserves
+  sequential order too visibly (`9ix` → `9iy`).
+- **Cloudflare rewrites the host at the edge.** App never sees
+  `cmpst.org`; no Caddyfile changes, no host-based branching. See DEPLOY.md
+  §6.
+- **`shortlink_redirects` is empty by default.** Resolution always tries
+  `decodeId` first; the table is consulted only on miss. It exists so that
+  any future change to the Sqids config (alphabet/`minLength`) can be made
+  safely: run `scripts/freeze-shortlink-tokens.ts` first to persist every
+  current token, then change the config. See NOTES.md for the procedure.
+  This mirrors Phase 13: tokens point to `post_id`, not paths, so renames
+  collapse to the current canonical via a single JOIN.
+- **`SHORT_URL_BASE` is hardcoded.** Keeps `slug.ts` free of `$env`
+  imports so it remains usable from the CLI scripts (`init-db`, `seed`,
+  `export-and-backup`, `freeze-shortlink-tokens`).
+- **Endpoint expression: `(id ? getPostById(id) : null) ?? getPostByOldToken(token)`.**
+  Concise; expresses the precedence (current encoder wins, redirect ledger
+  is the fallback) in one line.
+
+### Checkpoint
+
+- [x] All new tests green (shortid: 8, slug: 3 new, db: 9 new, endpoint: 5, freeze: 3, admin: 1)
+- [x] Full suite green (321 tests pass)
+- [x] `npm run check` clean
+- [x] Manual browser pass: `/p/xpfD` 301s to `/2026/05/21/4411cee2`,
+      then 200; admin edit page renders `https://cmpst.org/p/xpfD` next to
+      the permalink; garbage tokens 404; valid alphabet decoding to an
+      unknown id also 404s
+- [ ] Cloudflare configured for cmpst.org (DNS, Single Redirect rule,
+      apex catch-all, SSL Full strict) — owner: Allan, post-deploy
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

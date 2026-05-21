@@ -78,6 +78,28 @@ Confirm `compostmodernism.org` (A record) points at cornhill's IP.
 If using Cloudflare's proxy (orange cloud), set SSL mode to
 **Full (strict)** so Caddy can issue its own Let's Encrypt cert.
 
+### Short-URL alias: `cmpst.org`
+
+Per-post short URLs are served via the alias domain `cmpst.org`. The app
+itself only ever handles requests on `compostmodernism.org` — Cloudflare
+rewrites the host at the edge, so no Caddyfile changes are needed.
+
+1. **Add `cmpst.org` as a zone in Cloudflare**, update the registrar
+   (Hover) nameservers to Cloudflare's assigned pair.
+2. **Placeholder DNS record** so the zone has something to attach rules to.
+   `A cmpst.org 192.0.2.1` (RFC 5737 test address), proxied (orange cloud).
+   The address is never reached — the redirect rule fires first.
+3. **Single Redirect rule** (Rules → Redirect Rules → Create):
+   - **When incoming requests match**:
+     `(http.host eq "cmpst.org" and starts_with(http.request.uri.path, "/p/"))`
+   - **Then**: Dynamic redirect, expression
+     `concat("https://compostmodernism.org", http.request.uri.path)`,
+     status `301`, Preserve query string: on.
+4. **Apex catch-all** (recommended): a second rule for
+   `http.host eq "cmpst.org"` (any path) → `https://compostmodernism.org`
+   so visiting the bare short domain doesn't 404.
+5. **SSL/TLS mode**: `Full (strict)`, matching the main zone.
+
 ## 7. Bootstrap the app container
 
 ```bash

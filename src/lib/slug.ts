@@ -1,3 +1,5 @@
+import { encodeId } from './shortid';
+
 export function slugify(title: string): string {
 	return title
 		.toLowerCase()
@@ -30,4 +32,14 @@ export interface PermalinkInput {
 export function permalink(post: PermalinkInput): string {
 	const { year, month, day } = dateParts(post.created_at);
 	return `/${year}/${month}/${day}/${post.slug}`;
+}
+
+export const SHORT_URL_BASE = 'https://cmpst.org';
+
+export interface ShortlinkInput {
+	id: number;
+}
+
+export function shortlink(post: ShortlinkInput): string {
+	return `${SHORT_URL_BASE}/p/${encodeId(post.id)}`;
 }

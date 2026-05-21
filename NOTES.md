@@ -5,6 +5,32 @@ entries go on top.
 
 ---
 
+## Freeze shortlink tokens BEFORE changing the Sqids encoder config
+
+The short-URL service (`/p/[token]`) decodes tokens with the Sqids config in
+`src/lib/shortid.ts` (alphabet + minLength). The config is effectively a
+schema: changing any of it invalidates every previously shared short link
+unless you persist the old tokens first.
+
+The procedure:
+
+1. Run `npx tsx scripts/freeze-shortlink-tokens.ts` on the deployed db. This
+   walks every post and writes `(encodeId(id), id)` into `shortlink_redirects`
+   under the *current* config. Idempotent — safe to re-run.
+2. Then change the alphabet / minLength in `src/lib/shortid.ts`.
+3. Deploy.
+
+After deploy, the `/p/[token]` resolver tries `decodeId` first (new config),
+falls back to `shortlink_redirects` for tokens shared under the old config.
+Both keep working.
+
+The same pattern applies if you ever want to rotate the encoder for opacity
+reasons — freeze, change, deploy.
+
+If you change the config without freezing first, every shared short URL
+becomes a 404. There is no recovery short of restoring an old DB and running
+the freeze retroactively against it.
+
 ## adapter-node has its own body-size limit, separate from Caddy
 
 SvelteKit's `@sveltejs/adapter-node` enforces a request body limit
