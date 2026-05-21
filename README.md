@@ -19,6 +19,7 @@ This file is the architectural overview — what the running app actually is.
 | Image pipeline | `sharp` — EXIF stripped, max 1600×1600, converted to WebP |
 | Object storage | Cloudflare R2 via `@aws-sdk/client-s3` (images + nightly DB backups) |
 | Markdown | `marked` (rendered server-side at request time) |
+| Short IDs | `sqids` — reversible, hash-like tokens for `/p/[token]` short URLs |
 | RSS | `feed` — full-text RSS 2.0 at `/feeds/posts.xml` |
 | Validation | `zod` `safeParse` on every API route |
 | Tests | `vitest` + `@testing-library/svelte` + `happy-dom`, 150+ tests across the codebase |
@@ -34,7 +35,9 @@ This file is the architectural overview — what the running app actually is.
 │   ├── lib/
 │   │   ├── db.ts            # createDb() + all query functions (typed PostRow/Post/Tag/ImageRow)
 │   │   ├── migrate.ts       # Runs pending migrations/*.sql per PRAGMA user_version
-│   │   ├── slug.ts          # slugify, hashSlug, dateParts, permalink
+│   │   ├── slug.ts          # slugify, hashSlug, dateParts, permalink, shortlink
+│   │   ├── shortid.ts       # Sqids encode/decode for short post tokens
+│   │   ├── shortid-freeze.ts # Freezes current tokens into shortlink_redirects (migration tool)
 │   │   ├── markdown.ts      # marked wrapper used by feed + post pages
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
@@ -57,10 +60,13 @@ This file is the architectural overview — what the running app actually is.
 ├── scripts/
 │   ├── init-db.ts                # One-shot: open posts.db so migrations run
 │   ├── export-and-backup.ts      # Nightly markdown export → archive/, then DB → R2
+│   ├── freeze-shortlink-tokens.ts # One-shot: persist current short tokens before changing Sqids config
 │   ├── seed.ts                   # Local-only fixture data
 │   └── fixtures.ts
 ├── migrations/
-│   └── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
+│   ├── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
+│   ├── 002_slug_redirects.sql    # Path → post_id ledger for slug/date renames
+│   └── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
 ├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
@@ -295,6 +301,21 @@ Records the resulting key in the `images` ledger.
 | 200 | `{ ok: true, url: string }` | Bytes uploaded to the *same* R2 key; `uploaded_at` bumped. `url` is unchanged from the prior version, so posts referencing the image stay intact. |
 
 **Request body:** `multipart/form-data` with an `image` file field.
+
+### `GET /p/[token]`
+
+Resolves a short post token (Sqids-encoded id) to the post's current canonical
+permalink. Decodes the token, looks up the post by id, and 301-redirects. On a
+decode miss or unknown id, falls back to `shortlink_redirects` (the
+migration-time backstop for old tokens). Public — no auth.
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 301 | (Location header) | Resolved to canonical `/YYYY/MM/DD/slug` |
+| 404 | (text) | Token does not decode and is not in the redirect ledger, or decoded id has no post |
+
+Designed to be reached via the short-URL alias `cmpst.org/p/[token]` →
+Cloudflare rewrites the host to `compostmodernism.org/p/[token]`. See DEPLOY.md.
 
 ### `GET /feeds/posts.xml`
 

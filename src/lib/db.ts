@@ -258,6 +258,13 @@ export function createDb(path: string) {
 		return row ? hydrate(row) : null;
 	}
 
+	function getPostById(id: number): Post | null {
+		const row = raw.prepare('SELECT * FROM posts WHERE id = ?').get(id) as
+			| PostRow
+			| undefined;
+		return row ? hydrate(row) : null;
+	}
+
 	function getPostsByTag(
 		tagSlug: string,
 		{ limit = 50 }: { limit?: number } = {}
@@ -313,6 +320,25 @@ export function createDb(path: string) {
 		return row ? hydrate(row) : null;
 	}
 
+	function recordShortlinkRedirect(token: string, postId: number): void {
+		raw.prepare(
+			`INSERT INTO shortlink_redirects (old_token, post_id)
+			 VALUES (?, ?)
+			 ON CONFLICT (old_token) DO NOTHING`
+		).run(token, postId);
+	}
+
+	function getPostByOldToken(token: string): Post | null {
+		const row = raw
+			.prepare(
+				`SELECT p.* FROM posts p
+				 JOIN shortlink_redirects r ON r.post_id = p.id
+				 WHERE r.old_token = ?`
+			)
+			.get(token) as PostRow | undefined;
+		return row ? hydrate(row) : null;
+	}
+
 	function updatePost(slug: string, update: PostUpdate): void {
 		const existing = raw
 			.prepare('SELECT id, slug, created_at FROM posts WHERE slug = ?')
@@ -361,12 +387,15 @@ export function createDb(path: string) {
 		getPosts,
 		countPosts,
 		getPostBySlug,
+		getPostById,
 		getPostsByTag,
 		getAllTags,
 		updatePost,
 		deletePost,
 		slugTaken,
 		getPostByOldPath,
+		recordShortlinkRedirect,
+		getPostByOldToken,
 		recordImage,
 		getImages,
 		countImages,
@@ -391,6 +420,7 @@ export const insertPost: Db['insertPost'] = (input) => defaultDb().insertPost(in
 export const getPosts: Db['getPosts'] = (opts) => defaultDb().getPosts(opts);
 export const countPosts: Db['countPosts'] = () => defaultDb().countPosts();
 export const getPostBySlug: Db['getPostBySlug'] = (slug) => defaultDb().getPostBySlug(slug);
+export const getPostById: Db['getPostById'] = (id) => defaultDb().getPostById(id);
 export const getPostsByTag: Db['getPostsByTag'] = (slug, opts) =>
 	defaultDb().getPostsByTag(slug, opts);
 export const getAllTags: Db['getAllTags'] = () => defaultDb().getAllTags();
@@ -400,6 +430,10 @@ export const deletePost: Db['deletePost'] = (slug) => defaultDb().deletePost(slu
 export const slugTaken: Db['slugTaken'] = (slug) => defaultDb().slugTaken(slug);
 export const getPostByOldPath: Db['getPostByOldPath'] = (oldPath) =>
 	defaultDb().getPostByOldPath(oldPath);
+export const recordShortlinkRedirect: Db['recordShortlinkRedirect'] = (token, postId) =>
+	defaultDb().recordShortlinkRedirect(token, postId);
+export const getPostByOldToken: Db['getPostByOldToken'] = (token) =>
+	defaultDb().getPostByOldToken(token);
 export const recordImage: Db['recordImage'] = (key) => defaultDb().recordImage(key);
 export const getImages: Db['getImages'] = (opts) => defaultDb().getImages(opts);
 export const countImages: Db['countImages'] = () => defaultDb().countImages();
