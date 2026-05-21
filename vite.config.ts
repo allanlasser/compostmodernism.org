@@ -4,6 +4,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [sveltekit(), svelteTesting()],
+	ssr: {
+		noExternal: ['@lucide/svelte']
+	},
 	test: {
 		setupFiles: ['./vitest.setup.ts'],
 		projects: [
