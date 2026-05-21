@@ -73,5 +73,11 @@ export const fixtures: PostFixture[] = [
 		body:
 			'Made bread again. The starter is two years old now and produces a remarkably consistent loaf — almost suspicious in its reliability.\n\n![Sourdough loaf cooling]({{IMG}}/images/2026/05/15/c5d2e6a8.webp)',
 		tags: ['kitchen']
+	},
+	{
+		title: 'A tiny snippet',
+		body:
+			'A useful one-liner I keep reaching for: `npm run check` runs `svelte-check` across both `.ts` and `.svelte` files.\n\nFenced blocks look like this:\n\n```ts\nexport function renderMarkdown(body: string): string {\n\tif (!body) return \'\';\n\treturn marked.parse(body, { async: false }) as string;\n}\n```\n\nAnd a longer line that should scroll horizontally inside the block instead of wrapping awkwardly:\n\n```sh\ndocker compose run --rm app node -e "console.log(require(\'better-sqlite3\')(\'posts.db\').prepare(\'SELECT count(*) AS n FROM posts\').get())"\n```',
+		tags: ['meta']
 	}
 ];

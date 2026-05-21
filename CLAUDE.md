@@ -127,6 +127,22 @@ npm run build     # production bundle into build/
 npm run seed      # fixture data into posts.db (idempotent)
 ```
 
+## Fresh worktree setup
+
+A new git worktree under `.claude/worktrees/<name>/` starts empty — no
+`node_modules`, no `.env`, no `posts.db`. Bootstrap before running anything:
+
+```sh
+npm install                  # populate node_modules for this worktree
+ln -s ../../../.env .env     # symlink to the main checkout's env (or copy if you need divergent values)
+npm run seed                 # only if you want fixture data in this worktree
+```
+
+Symptom of skipping `npm install`: vitest fails 17 suites with
+`Cannot find module '/@fs/.../node_modules/@testing-library/svelte/...'`.
+Symptom of skipping `.env`: dev server starts but API routes 500 on
+missing `ADMIN_PASSWORD` / `R2_*` values.
+
 ## Gotchas worth knowing up front
 
 - **Restart the dev server after wiping `posts.db`.** Ghost-inode trap; see

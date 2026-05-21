@@ -182,6 +182,30 @@
     line-height: 1.7;
   }
 
+  .body :global(code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75em;
+    background: var(--color-surface-subtle);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+
+  .body :global(pre) {
+    margin: var(--space-stack) 0;
+    padding: 0.75em 1em;
+    background: var(--color-surface-subtle);
+    border-radius: 4px;
+    overflow-x: auto;
+    line-height: 1.4;
+    tab-size: 2;
+  }
+
+  .body :global(pre code) {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
 	.post--titled h2,
   .post--link h2 {
     font-family: var(--font-display);
