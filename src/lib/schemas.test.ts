@@ -21,6 +21,25 @@ describe('postInputSchema', () => {
 			expect(r.data.url).toBeNull();
 		}
 	});
+
+	it('accepts an optional slug matching lowercase, digits, hyphens', () => {
+		const r = postInputSchema.safeParse({ body: 'b', slug: 'hello-world-2' });
+		expect(r.success).toBe(true);
+		if (r.success) expect(r.data.slug).toBe('hello-world-2');
+	});
+
+	it('rejects a slug with spaces, uppercase, or other characters', () => {
+		for (const bad of ['Hello World', 'HELLO', 'foo bar', 'foo/bar', 'foo.bar', '']) {
+			const r = postInputSchema.safeParse({ body: 'b', slug: bad });
+			expect(r.success).toBe(false);
+		}
+	});
+
+	it('omits slug from parsed output when not provided', () => {
+		const r = postInputSchema.safeParse({ body: 'b' });
+		expect(r.success).toBe(true);
+		if (r.success) expect(r.data.slug).toBeUndefined();
+	});
 });
 
 describe('postUpdateSchema', () => {

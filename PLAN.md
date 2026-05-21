@@ -1246,6 +1246,102 @@ test: renders a shortlink anchor alongside the permalink in the meta line
 
 ---
 
+## Phase 17 — User-Provided Slugs at Create Time
+
+**Goal:** Let an author seed a custom slug when publishing — useful for
+untitled posts that should still have a memorable URL instead of the
+default `hashSlug(now)` fallback. Mirrors the rename path's 409
+collision contract from Phase 13.
+
+### Design decisions (locked before coding)
+
+- **Slug is optional everywhere.** Missing slug → existing fallback
+  (`slugify(title) || hashSlug(now)`) plus `uniqueSlug` collision
+  suffixing. Caller behaviour unchanged when no slug is sent.
+- **Provided slug is used verbatim.** No `-2` suffix on a deliberate
+  user choice — silently mangling someone's URL would feel like a bug.
+  Collision is the API layer's job.
+- **API does the precheck**, just like PATCH: `slugTaken(slug)` → 409
+  before the insert. `insertPost` stays single-purpose; if a non-API
+  caller passes a colliding slug it gets a SQLite `UNIQUE` error,
+  which is correct loud behaviour for a contract violation.
+- **Shared `slugSchema`.** The regex moves to one place in
+  `schemas.ts`; `postInputSchema` and `postUpdateSchema` both reuse
+  it so they can't drift.
+- **Form-side gate is just truthiness.** Drop the `mode === 'edit'`
+  check in `PostForm.submit`; the existing "slug differs from initial"
+  rule already gives the right behaviour in create mode because
+  `initial.slug` is `undefined → ''`.
+- **Untitled posts** already worked end-to-end; this phase removes the
+  one remaining sharp edge (you couldn't choose the URL).
+
+### Files
+
+- `src/lib/schemas.ts` — extract `slugSchema`; add `slug: slugSchema.optional()` to `postInputSchema`.
+- `src/lib/db.ts` — extend `PostInput` with `slug?: string`; `insertPost` uses provided slug verbatim, otherwise existing fallback.
+- `src/routes/api/post/+server.ts` — `slugTaken` precheck → 409; forward `slug` to `insertPost`.
+- `src/lib/components/admin/PostForm.svelte` — drop `mode === 'edit'` gate in `submit`'s wire-payload assembly.
+- Tests next to each touched source file.
+
+### Red → Green cycles
+
+`src/lib/schemas.test.ts`:
+```
+test: postInputSchema accepts an optional slug matching lowercase, digits, hyphens
+test: postInputSchema rejects a slug with spaces / uppercase / other chars / empty
+test: postInputSchema omits slug from parsed output when not provided
+```
+
+`src/lib/db.test.ts` (`describe('insertPost')`):
+```
+test: user-provided slug used verbatim, no -2 suffix
+test: user-provided slug with no title used verbatim (no hashSlug fallback)
+```
+
+`src/routes/api/post/post.test.ts`:
+```
+test: 201 with user-provided slug → forwarded to insertPost verbatim
+test: 409 when user-provided slug is already taken (insertPost not called)
+test: 400 when slug has invalid characters
+```
+
+`src/lib/components/admin/PostForm.svelte.test.ts`:
+```
+test: create mode with a slug typed in → POST payload includes the slug
+test: create mode with blank slug → POST payload omits the slug field
+```
+
+### Checkpoint
+
+- [x] `npm test` green (330 tests)
+- [x] `npm run check` clean
+- [x] Manual browser pass (Playwright, 2026-05-21): typed slug
+      `browser-check-custom-slug` published to
+      `/2026/05/21/browser-check-custom-slug` and the public page
+      rendered the body; submitting the same slug again surfaced
+      `slug "browser-check-custom-slug" is already in use by another
+      post` inline with no navigation; submitting `Has Spaces And
+      UPPER` returned 400 with no DB write but the inline message was
+      the generic `Request failed (400)` — see follow-up below;
+      blank slug + title `Browser Check Titled Blank Slug` published
+      to `browser-check-titled-blank-slug` (slugify fallback); blank
+      slug + no title published to `f44a560b` (hashSlug fallback).
+
+### Follow-up (UX, not blocking)
+
+- `+server.ts` returns `{ error: parsed.error.flatten(...) }` (an
+  **object**), but `PostForm.submit` only renders `j.error` when it's
+  a string and otherwise falls back to `Request failed (${status})`.
+  Result: bad-slug-chars surfaces 400 inline but with no helpful
+  message. Two clean fixes:
+  1. Flatten in the API to a single string for slug specifically
+     (`parsed.error.issues[0].message`), or
+  2. Teach the form to render a structured `error.fieldErrors.slug`.
+  Option 2 is more general; pair with client-side regex validation so
+  the request isn't sent in the first place.
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

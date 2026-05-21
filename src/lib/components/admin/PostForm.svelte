@@ -111,7 +111,7 @@
 
 		const wirePayload: Record<string, unknown> = { ...parsed.data };
 		const trimmedSlug = slug.trim();
-		if (mode === 'edit' && trimmedSlug && trimmedSlug !== (initial.slug ?? '')) {
+		if (trimmedSlug && trimmedSlug !== (initial.slug ?? '')) {
 			wirePayload.slug = trimmedSlug;
 		}
 
@@ -170,11 +170,12 @@
   {/if}
 
   <label id="title">
+    <span class="label visually-hidden">Title</span>
     <input name="title" type="text" bind:value={title} disabled={submitting} placeholder="Untitled" />
     {#if fieldErrors.title}<span class="field-error">{fieldErrors.title}</span>{/if}
   </label>
 
-  <label id="body">
+  <div id="body" class="body-field">
     <div class="body-toolbar">
       <button
         type="button"
@@ -185,15 +186,18 @@
         Insert image
       </button>
     </div>
-    <textarea
-      rows="10"
-      bind:value={body}
-      bind:this={bodyTextarea}
-      disabled={submitting}
-      placeholder="Start writing…"
-    ></textarea>
+    <label>
+      <span class="label visually-hidden">Body</span>
+      <textarea
+        rows="10"
+        bind:value={body}
+        bind:this={bodyTextarea}
+        disabled={submitting}
+        placeholder="Start writing…"
+      ></textarea>
+    </label>
     {#if fieldErrors.body}<span class="field-error">{fieldErrors.body}</span>{/if}
-  </label>
+  </div>
 
   <div class="form-group">
     <label id="url">
@@ -228,7 +232,13 @@
   <div class="actions">
     <button id="save" type="submit" class="button" disabled={submitting}>{buttonLabel}</button>
     {#if mode === "edit"}
-    <button type="button" class="ghost delete button" onclick={remove} disabled={deleting}>
+    <button
+      type="button"
+      class="ghost delete button"
+      onclick={remove}
+      disabled={deleting}
+      aria-label="Delete post"
+    >
       {#if deleting}
         <LoaderCircle size="16" />
       {:else}
@@ -338,6 +348,18 @@
 		font-style: italic;
 	}
 
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	.field-error,
 	.form-error {
 		color: var(--color-danger);
@@ -359,6 +381,7 @@
 		padding: 0;
 		cursor: pointer;
 		color: var(--color-ink-soft);
+    font-size: var(--size-meta);
 	}
 
 	.body-toolbar .link:hover:not(:disabled) {

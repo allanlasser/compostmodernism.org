@@ -10,10 +10,15 @@ const emptyToNull = z
 	.nullish()
 	.transform((v) => v || null);
 
+const slugSchema = z
+	.string()
+	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase letters, digits, and hyphens');
+
 export const postInputSchema = z.object({
 	body: z.string().trim().min(1, 'body is required'),
 	title: emptyToNull,
 	url: emptyToNull,
+	slug: slugSchema.optional(),
 	tags: z
 		.array(z.unknown())
 		.optional()
@@ -29,10 +34,7 @@ export const postUpdateSchema = z.object({
 	title: z.string().trim().nullable().optional(),
 	url: z.string().trim().nullable().optional(),
 	tags: z.array(z.string().trim()).optional(),
-	slug: z
-		.string()
-		.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase letters, digits, and hyphens')
-		.optional(),
+	slug: slugSchema.optional(),
 	created_at: z.number().int().positive().optional()
 });
 

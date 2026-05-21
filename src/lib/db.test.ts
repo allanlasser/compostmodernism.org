@@ -314,6 +314,18 @@ describe('insertPost', () => {
 		const { slug } = db.insertPost({ body: 'b', title: 't', tags: [] });
 		expect(db.getPostBySlug(slug)?.tags).toEqual([]);
 	});
+
+	it('user-provided slug — used verbatim, no -2 suffix', () => {
+		const result = db.insertPost({ body: 'b', title: 'Anything', slug: 'my-chosen-slug' });
+		expect(result.slug).toBe('my-chosen-slug');
+	});
+
+	it('user-provided slug with no title — used verbatim (no hashSlug fallback)', () => {
+		const result = db.insertPost({ body: 'just thinking', slug: 'thinking-out-loud' });
+		expect(result.slug).toBe('thinking-out-loud');
+		const post = db.getPostBySlug(result.slug);
+		expect(post?.title).toBeNull();
+	});
 });
 
 describe('getPosts', () => {

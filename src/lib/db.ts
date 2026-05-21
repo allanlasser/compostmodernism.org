@@ -37,6 +37,7 @@ export interface PostInput {
 	title?: string | null;
 	url?: string | null;
 	tags?: string[];
+	slug?: string;
 }
 
 export interface PostUpdate {
@@ -225,8 +226,9 @@ export function createDb(path: string) {
 
 	function insertPost(input: PostInput): InsertResult {
 		const now = Date.now();
-		const baseSlug = input.title ? slugify(input.title) : hashSlug(now);
-		const slug = uniqueSlug(baseSlug);
+		const slug = input.slug
+			? input.slug
+			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(now));
 		const result = raw
 			.prepare(
 				`INSERT INTO posts (slug, body, title, url, created_at)

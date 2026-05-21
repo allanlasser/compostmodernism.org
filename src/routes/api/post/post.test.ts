@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('$lib/db', () => ({
-	insertPost: vi.fn()
+	insertPost: vi.fn(),
+	slugTaken: vi.fn()
 }));
 vi.mock('$env/dynamic/private', () => ({
 	env: { POST_SECRET: 'test-secret' }
 }));
 
 import { POST } from './+server';
-import { insertPost } from '$lib/db';
+import { insertPost, slugTaken } from '$lib/db';
 
 const mockInsert = vi.mocked(insertPost);
+const mockSlugTaken = vi.mocked(slugTaken);
 
 function req(body: unknown, auth?: string): Request {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -25,6 +27,8 @@ function req(body: unknown, auth?: string): Request {
 beforeEach(() => {
 	mockInsert.mockReset();
 	mockInsert.mockReturnValue({ id: 1, slug: 'hello-world' });
+	mockSlugTaken.mockReset();
+	mockSlugTaken.mockReturnValue(false);
 });
 
 describe('POST /api/post', () => {
@@ -93,6 +97,38 @@ describe('POST /api/post', () => {
 			url: 'https://x',
 			tags: ['food', 'travel']
 		});
+	});
+
+	it('201 with user-provided slug → forwarded to insertPost verbatim', async () => {
+		mockInsert.mockReturnValue({ id: 1, slug: 'my-chosen-slug' });
+		const res = await POST({
+			request: req(
+				{ body: 'thinking out loud', slug: 'my-chosen-slug' },
+				'Bearer test-secret'
+			)
+		} as never);
+		expect(res.status).toBe(201);
+		expect(mockSlugTaken).toHaveBeenCalledWith('my-chosen-slug');
+		expect(mockInsert).toHaveBeenCalledWith(
+			expect.objectContaining({ body: 'thinking out loud', slug: 'my-chosen-slug' })
+		);
+	});
+
+	it('409 when user-provided slug is already taken', async () => {
+		mockSlugTaken.mockReturnValue(true);
+		const res = await POST({
+			request: req({ body: 'b', slug: 'taken-slug' }, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(409);
+		expect(mockInsert).not.toHaveBeenCalled();
+	});
+
+	it('400 when slug has invalid characters', async () => {
+		const res = await POST({
+			request: req({ body: 'b', slug: 'Has Spaces' }, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(400);
+		expect(mockInsert).not.toHaveBeenCalled();
 	});
 
 	it('trims whitespace and coerces empty strings to null', async () => {

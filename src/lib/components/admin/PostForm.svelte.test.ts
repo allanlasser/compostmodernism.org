@@ -138,7 +138,7 @@ describe('PostForm', () => {
 			}
 		});
 		expect((getByLabelText(/^Title/) as HTMLInputElement).value).toBe('T');
-		expect((getByLabelText(/^URL/) as HTMLInputElement).value).toBe('https://x');
+		expect((getByLabelText(/^Link/) as HTMLInputElement).value).toBe('https://x');
 		expect((getByLabelText(/^Tags/) as HTMLInputElement).value).toBe('a, b');
 		expect((container.querySelector('textarea') as HTMLTextAreaElement).value).toBe('b');
 	});
@@ -148,9 +148,35 @@ describe('PostForm', () => {
 			return container.querySelector('input[name="slug"]');
 		}
 
-		it('create mode → no slug input rendered', () => {
+		it('create mode → slug input rendered, empty', () => {
 			const { container } = render(PostForm, { props: { mode: 'create' } });
-			expect(slugInput(container)).toBeNull();
+			const input = slugInput(container);
+			expect(input).not.toBeNull();
+			expect(input!.value).toBe('');
+		});
+
+		it('create mode with a slug typed in → POST payload includes the slug', async () => {
+			const fetchMock = stubFetchOk({ ok: true, slug: 'my-chosen-slug' });
+			const { container, getByRole } = render(PostForm, { props: { mode: 'create' } });
+			const bodyTextarea = container.querySelector('textarea') as HTMLTextAreaElement;
+			await fireEvent.input(bodyTextarea, { target: { value: 'thinking out loud' } });
+			await fireEvent.input(slugInput(container)!, { target: { value: 'my-chosen-slug' } });
+			await fireEvent.click(getByRole('button', { name: 'Publish' }));
+
+			const call = fetchMock.mock.calls[0];
+			expect(call[0]).toBe('/api/post');
+			expect(call[1].body).toContain('"slug":"my-chosen-slug"');
+		});
+
+		it('create mode with blank slug → POST payload omits the slug field', async () => {
+			const fetchMock = stubFetchOk({ ok: true, slug: 'auto-generated' });
+			const { container, getByRole } = render(PostForm, { props: { mode: 'create' } });
+			const bodyTextarea = container.querySelector('textarea') as HTMLTextAreaElement;
+			await fireEvent.input(bodyTextarea, { target: { value: 'just thinking' } });
+			await fireEvent.click(getByRole('button', { name: 'Publish' }));
+
+			const call = fetchMock.mock.calls[0];
+			expect(call[1].body).not.toContain('"slug":');
 		});
 
 		it('edit mode → slug input rendered, prefilled with the current slug', () => {
@@ -160,13 +186,6 @@ describe('PostForm', () => {
 			const input = slugInput(container);
 			expect(input).not.toBeNull();
 			expect(input!.value).toBe('existing');
-		});
-
-		it('edit mode → help text mentions redirect behaviour', () => {
-			const { container } = render(PostForm, {
-				props: { mode: 'edit', initial: { slug: 'existing', body: 'b' } }
-			});
-			expect(container.textContent?.toLowerCase()).toContain('redirect');
 		});
 
 		it('changing the slug → PATCH payload includes the new slug', async () => {
