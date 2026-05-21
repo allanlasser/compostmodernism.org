@@ -21,7 +21,7 @@
 	.admin-shell {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-section);
+		gap: var(--space-stack);
 		width: 100%;
 	}
 </style>

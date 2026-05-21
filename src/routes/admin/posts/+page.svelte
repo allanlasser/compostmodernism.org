@@ -25,7 +25,7 @@
 
 <header class="posts-header">
   <p class="status">{data.total} {data.total === 1 ? 'post' : 'posts'}</p>
-  <a class="new-post" href="/admin/posts/new">+ New post</a>
+  <a class="button" href="/admin/posts/new">+ New post</a>
 </header>
 
 <PostsTable posts={data.posts} />
@@ -52,15 +52,6 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-stack);
-	}
-
-	.new-post {
-		text-decoration: none;
-		font-style: italic;
-	}
-
-	.new-post:hover {
-		text-decoration: underline;
 	}
 
 	.pager {

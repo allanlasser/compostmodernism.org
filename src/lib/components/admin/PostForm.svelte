@@ -2,6 +2,8 @@
 	import { untrack } from 'svelte';
 	import { postInputSchema, type PostInputParsed } from '$lib/schemas';
 	import ImageUploadModal from './ImageUploadModal.svelte';
+  import TrashIcon from '@lucide/svelte/icons/trash-2';
+  import { LoaderCircle } from '@lucide/svelte';
 
 	interface Initial {
 		slug?: string;
@@ -148,7 +150,7 @@
       throw new Error('Missing slug!')
     }
 		const label = title ?? initial.slug;
-		if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+		if (!window.confirm(`Delete this post? This cannot be undone.`)) return;
 		deleting = true;
 		const res = await fetch(`/api/post/${encodeURIComponent(initial.slug)}`, {
 			method: 'DELETE'
@@ -163,56 +165,16 @@
 </script>
 
 <form class="post-form" onsubmit={submit} novalidate>
-  <div>
-    {#if formError}
-      <p class="form-error" role="alert">{formError}</p>
-    {/if}
-    <label>
-      <span class="label">Title</span>
-      <input type="text" bind:value={title} disabled={submitting} />
-      {#if fieldErrors.title}<span class="field-error">{fieldErrors.title}</span>{/if}
-    </label>
+  {#if formError}
+    <p class="form-error" role="alert">{formError}</p>
+  {/if}
 
-    <label>
-      <span class="label">URL <span class="hint">(for link posts)</span></span>
-      <input type="url" bind:value={url} disabled={submitting} />
-      {#if fieldErrors.url}<span class="field-error">{fieldErrors.url}</span>{/if}
-    </label>
+  <label id="title">
+    <input name="title" type="text" bind:value={title} disabled={submitting} placeholder="Untitled" />
+    {#if fieldErrors.title}<span class="field-error">{fieldErrors.title}</span>{/if}
+  </label>
 
-    {#if mode === 'edit'}
-      <label>
-        <span class="label">Slug <span class="hint">(changing this leaves a 301 redirect behind)</span></span>
-        <input
-          type="text"
-          name="slug"
-          bind:value={slug}
-          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-          disabled={submitting}
-        />
-      </label>
-    {/if}
-
-    <label>
-      <span class="label">Tags <span class="hint">(comma-separated)</span></span>
-      <input
-        type="text"
-        bind:value={tags}
-        placeholder="food, travel, tech"
-        disabled={submitting}
-      />
-      {#if fieldErrors.tags}<span class="field-error">{fieldErrors.tags}</span>{/if}
-    </label>
-
-    <label>
-      <span class="label">Body</span>
-      <textarea
-        rows="10"
-        bind:value={body}
-        bind:this={bodyTextarea}
-        disabled={submitting}
-      ></textarea>
-      {#if fieldErrors.body}<span class="field-error">{fieldErrors.body}</span>{/if}
-    </label>
+  <label id="body">
     <div class="body-toolbar">
       <button
         type="button"
@@ -223,13 +185,55 @@
         Insert image
       </button>
     </div>
+    <textarea
+      rows="10"
+      bind:value={body}
+      bind:this={bodyTextarea}
+      disabled={submitting}
+      placeholder="Start writing…"
+    ></textarea>
+    {#if fieldErrors.body}<span class="field-error">{fieldErrors.body}</span>{/if}
+  </label>
+
+  <div class="form-group">
+    <label id="url">
+      <span class="label">Link</span>
+      <input type="url" bind:value={url} disabled={submitting} />
+      {#if fieldErrors.url}<span class="field-error">{fieldErrors.url}</span>{/if}
+    </label>
+
+    <label id="tags">
+      <span class="label">Tags <span class="hint">(comma-separated)</span></span>
+      <input
+        type="text"
+        bind:value={tags}
+        placeholder="food, travel, tech"
+        disabled={submitting}
+      />
+      {#if fieldErrors.tags}<span class="field-error">{fieldErrors.tags}</span>{/if}
+    </label>
+
+    <label id="slug">
+      <span class="label">Slug</span>
+      <input
+        type="text"
+        name="slug"
+        bind:value={slug}
+        pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+        disabled={submitting}
+      />
+    </label>
   </div>
 
   <div class="actions">
-    <button type="submit" disabled={submitting}>{buttonLabel}</button>
+    <button id="save" type="submit" class="button" disabled={submitting}>{buttonLabel}</button>
     {#if mode === "edit"}
-    <button type="button" class="delete" onclick={remove} disabled={deleting}>
-      {deleting ? 'Deleting…' : 'Delete post'}
+    <button type="button" class="ghost delete button" onclick={remove} disabled={deleting}>
+      {#if deleting}
+        <LoaderCircle size="16" />
+      {:else}
+        <TrashIcon size={16} />
+      {/if}
     </button>
     {/if}
   </div>
@@ -248,10 +252,61 @@
 <style>
 	.post-form {
 		display: grid;
-		grid-template-columns: minmax(66ch, 1fr) var(--space-rail);
-		gap: var(--space-gap);
+		grid-template-columns: 1fr var(--space-rail);
+		gap: var(--space-stack) var(--space-gap);
 		width: 100%;
 	}
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-stack);
+    grid-column: 2/3;
+  }
+
+  #body, #title {
+    grid-column: 1/2;
+  }
+
+  @media (max-width: 640px) {
+    .post-form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-stack);
+    }
+    .actions {
+      position: sticky;
+      bottom: 0;
+      background: var(--color-bg);
+      padding: 1em 0;
+    }
+  }
+
+  #title input {
+    font-family: var(--font-display);
+    font-style: italic;
+		font-size: var(--size-lede);
+		line-height: 1.4;
+    padding: 0.2em 0.6em;
+    &::placeholder {
+      color: var(--color-ink);
+      opacity: 0.4;
+    }
+  }
+
+  #body textarea {
+    font-size: var(--size-body);
+		line-height: var(--leading-body);
+		margin: 0;
+    &::placeholder {
+      color: var(--color-ink);
+      opacity: 0.4;
+    }
+  }
+
+  #save {
+    flex: 1 1 auto;
+  }
 
 	.post-form label {
 		display: flex;
@@ -259,12 +314,10 @@
 		gap: 0.25em;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
-    margin-bottom: var(--space-stack);
 	}
 
 	.post-form input,
-	.post-form textarea,
-	.post-form button {
+	.post-form textarea {
 		font: inherit;
 		padding: 0.4em 0.6em;
     background: var(--color-field);
@@ -274,10 +327,6 @@
       background: var(--color-field-focus);
     }
 	}
-
-  .post-form button {
-    cursor: pointer;
-  }
 
 	.post-form textarea {
 		font-family: var(--font-serif);
@@ -296,18 +345,15 @@
 	}
 
 	.actions {
+    grid-row: 1/2;
+    grid-column: 2/3;
 		display: flex;
-    flex-direction: column;
 		gap: var(--space-stack);
 	}
 
-	.actions button[type='submit'] {
-		min-width: 6em;
-	}
-
 	.body-toolbar .link {
+    display: inline-block;
 		font: inherit;
-		font-style: italic;
 		background: transparent;
 		border: 0;
 		padding: 0;
@@ -323,23 +369,9 @@
 	.body-toolbar {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 0.25em;
 	}
 
-	button.delete {
-		font: inherit;
-		font-style: italic;
-		background: transparent;
-		border: 0;
-		padding: 0.25em 0.5em;
-		cursor: pointer;
-		color: var(--color-danger);
-    &:hover {
-      background: var(--color-danger-bg);
-    }
-	}
-
-	button.delete:hover:not(:disabled) {
-		text-decoration: underline;
-	}
+  .button.delete {
+    min-width: unset;
+  }
 </style>

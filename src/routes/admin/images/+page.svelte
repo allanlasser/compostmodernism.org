@@ -40,7 +40,7 @@
 	<p class="status">{data.total} {data.total === 1 ? 'image' : 'images'}</p>
 	<label class="upload">
 		<input type="file" accept="image/*" onchange={uploadNew} disabled={uploading} />
-		<span>{uploading ? 'Uploading…' : '+ Upload image'}</span>
+		<span class="button">{uploading ? 'Uploading…' : '+ Upload image'}</span>
 	</label>
 </header>
 {#if uploadError}<p class="error">{uploadError}</p>{/if}
@@ -72,16 +72,11 @@
 	}
 
 	.upload {
-		font-style: italic;
 		cursor: pointer;
 	}
 
 	.upload input {
 		display: none;
-	}
-
-	.upload span:hover {
-		text-decoration: underline;
 	}
 
 	.error {
