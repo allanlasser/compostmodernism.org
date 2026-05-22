@@ -184,6 +184,19 @@
     line-height: 1.7;
   }
 
+  .body :global(ul) {
+    list-style-type: disc;
+    margin: var(--space-stack) 0 var(--space-stack) 1.5em;
+  }
+
+  .body :global(ul li) {
+    margin: 0.25em 0;
+  }
+
+  .body :global(ul li::marker) {
+    color: var(--color-ink-soft);
+  }
+
   .body :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.75em;
