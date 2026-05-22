@@ -105,6 +105,7 @@
 		display: grid;
 		grid-template-columns: 1fr var(--space-rail);
 		gap: var(--space-gap);
+    align-items: baseline;
 		width: 100%;
 	}
 
@@ -172,13 +173,14 @@
 	}
 
   .body :global(blockquote) {
-    margin: var(--space-stack) 0 0;
-    padding: 0.25em 1em;
-    border-left: 2px solid var(--color-border);
+    margin: var(--space-stack) var(--space-stack) var(--space-stack) 0;
+    padding: 0.825em 1.125em;
+    border-radius: 4px;
+    background: var(--color-surface-subtle);
   }
 
   .body :global(blockquote p) {
-    font-size: 0.875em;
+    font-size: 0.925em;
     line-height: 1.7;
   }
 
@@ -233,6 +235,8 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-start;
+    align-items: baseline;
+    gap: 0.125em;
 	}
 
   .rail a {
@@ -252,8 +256,6 @@
 			gap: 0 var(--space-stack);
 		}
 		.rail {
-      flex-direction: row;
-      flex-wrap: wrap;
       align-items: baseline;
 			justify-content: flex-start;
       gap: 0 var(--space-stack);

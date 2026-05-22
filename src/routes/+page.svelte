@@ -23,7 +23,7 @@
 	.feed {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-gap);
+		gap: calc(1.5 * var(--space-gap));
     padding-top: var(--space-header);
 	}
 </style>
