@@ -24,8 +24,14 @@ for any future change to the Sqids encoder config — see NOTES.md.
 
 Images are uploaded via a dedicated Shortcut or the admin page, processed server-side
 with sharp (EXIF stripped, resized, converted to WebP), and stored in Cloudflare R2.
-R2 also receives nightly SQLite database backups. Posts are additionally exported nightly
-to individual markdown files with YAML frontmatter and committed to the git archive.
+
+Nightly, a cron-driven script bundles `posts.db` together with a full markdown
+export of every post (one `posts/YYYY/MM/DD/slug.md` per post, with YAML
+frontmatter) into a single `YYYY-MM-DD.zip`. The zip is written to a gitignored
+bind-mount directory on the VPS (`archive/`) and mirrored to Cloudflare R2 at
+`backups/YYYY-MM-DD.zip`. Either copy is a complete restore source — the
+markdown tree is human-readable; the embedded `posts.db` is byte-for-byte
+restorable.
 
 ---
 
@@ -89,11 +95,11 @@ compostmodernism/
 │               └── +server.js     # POST — create session (login)
 ├── scripts/
 │   ├── init-db.ts                 # One-time DB setup script
-│   └── export-and-backup.ts       # Nightly markdown export + R2 DB backup
+│   └── export-and-backup.ts       # Nightly archive/YYYY-MM-DD.zip (posts.db + markdown) → R2 mirror
 ├── migrations/
 │   └── 001_init.sql               # Versioned SQL files; runner applies on boot
-├── archive/
-│   └── YYYY/MM/DD/                # Per-post markdown files, auto-generated
+├── archive/                       # Gitignored. One YYYY-MM-DD.zip per nightly run
+│   └── YYYY-MM-DD.zip             #   (contains posts.db + posts/YYYY/MM/DD/slug.md tree)
 ├── svelte.config.js
 ├── vite.config.ts
 ├── package.json
@@ -1396,110 +1402,63 @@ clipboard. Switch to iA Writer and paste.
 
 ## 13. Nightly Export and Backup
 
-A single script runs two jobs: it exports each post to its own dated markdown file with
-YAML frontmatter, commits any new or changed files to git, then uploads a binary snapshot
-of `posts.db` to R2.
+A single script produces one artifact per night: a zip file named
+`YYYY-MM-DD.zip` containing a byte-for-byte copy of `posts.db` plus a full
+markdown export of every post with YAML frontmatter. The same zip is
+written to a gitignored bind-mount directory and mirrored to R2.
 
-**Archive file format:** `archive/YYYY/MM/DD/slug.md`
+```
+2026-05-23.zip
+├── posts.db
+└── posts/
+    └── YYYY/MM/DD/slug.md   ← one entry per post
+```
 
-Re-running the script overwrites existing files in place. If a post was edited since the
-last run, the updated file appears in the git diff — a clean audit trail of changes.
+**On-disk path:** `archive/YYYY-MM-DD.zip` (bind-mounted on the VPS).
+**R2 key:** `backups/YYYY-MM-DD.zip` (same basename, namespaced under the
+existing `backups/` prefix that already has a 90-day lifecycle rule).
+
+Each nightly zip is a complete restore source — there is no incremental
+chain. Drop a recent zip on a fresh host, replace `posts.db`, restart, and
+the site is back. The markdown tree inside the zip is the human-readable
+fallback if SQLite ever wedges.
+
+**What's intentionally absent:**
+
+- No git step. Earlier drafts committed `archive/` to git as a "source of
+  truth" surface, but `archive/` is gitignored — the commit step was a
+  silent no-op for the entire lifetime of Phase 7. The bind mount + R2
+  mirror are the durability surfaces; git is not in this picture.
+- No standalone `posts.db` upload. The DB now travels inside the zip.
+  Older `backups/posts-YYYY-MM-DD.db` objects are leftovers from the prior
+  scheme; the lifecycle rule will age them out.
+- No media in the archive. Static assets live in R2 under `images/` and
+  inherit Cloudflare's durability — copying them into every nightly zip
+  would be wasteful, and rewriting `static.compostmodernism.org` URLs in
+  the markdown would diverge the archive from the live DB.
 
 ### `scripts/export-and-backup.ts`
 
-The actual implementation is TypeScript and lives in this repo at
-`scripts/export-and-backup.ts`. The structure below is the reference
-shape — see the real file for typed Post/Tag wiring, the testable
-helper split (`renderFrontmatter`, `archivePath`, `backupKey`,
-`backupDatabase`), and the `import.meta`-guarded CLI entry. The script
-runs under `tsx` in production.
+The implementation is TypeScript at `scripts/export-and-backup.ts`. Pure
+helpers are exported and unit-tested in `export-and-backup.test.ts`:
 
-```javascript
-import Database from 'better-sqlite3';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { execSync } from 'child_process';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { permalink, dateParts } from '../src/lib/slug.js';
+- `renderFrontmatter(post)` — YAML frontmatter + body.
+- `archiveEntryPath(post)` → `posts/YYYY/MM/DD/slug.md` (zip-internal,
+  forward slashes per the zip spec).
+- `archiveFilename(date)` → `YYYY-MM-DD.zip` (UTC).
+- `r2Key(date)` → `backups/YYYY-MM-DD.zip`.
+- `buildArchive(posts, dbBytes)` → `Buffer` — pure: no fs, no clock, no
+  env. All side effects (reading `posts.db`, writing the zip to disk,
+  uploading to R2) live in `main()`.
+- `uploadBackup(r2, bucket, body, key)` — `PutObjectCommand` with
+  `ContentType: application/zip`.
 
-const DB_PATH = join(process.cwd(), 'posts.db');
-const db = new Database(DB_PATH);
+The zip is built in memory with `adm-zip` (devDependency — only the
+script uses it). Sized for a small personal blog; if the archive ever
+outgrows comfortable in-memory bundling, switch to a streaming writer.
 
-// ── 1. Per-post markdown export → git ────────────────────────────────────────
-
-const posts = db.prepare('SELECT * FROM posts ORDER BY created_at ASC').all();
-
-for (const post of posts) {
-  const tags = db.prepare(`
-    SELECT t.name FROM tags t
-    JOIN post_tags pt ON pt.tag_id = t.id
-    WHERE pt.post_id = ?
-    ORDER BY t.name
-  `).all(post.id).map(t => t.name);
-
-  const { year, month, day } = dateParts(post.created_at);
-  const dir  = join('archive', year, month, day);
-  const path = join(dir, `${post.slug}.md`);
-
-  // Build YAML frontmatter
-  const meta = [
-    '---',
-    `id: ${post.id}`,
-    `slug: ${post.slug}`,
-    `created_at: ${new Date(post.created_at).toISOString()}`,
-    `permalink: https://compostmodernism.org${permalink(post)}`,
-  ];
-
-  if (post.title) meta.push(`title: ${JSON.stringify(post.title)}`);
-  if (post.url)   meta.push(`url: ${post.url}`);
-  if (tags.length) {
-    meta.push('tags:');
-    tags.forEach(t => meta.push(`  - ${t}`));
-  }
-
-  meta.push('---', '', post.body, '');
-
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path, meta.join('\n'), 'utf8');
-}
-
-console.log(`Exported ${posts.length} posts to archive/`);
-
-try {
-  execSync('git add archive/');
-  execSync(`git commit -m "chore: export posts ${new Date().toISOString().slice(0, 10)}"`);
-  execSync('git push');
-  console.log('Pushed archive to git');
-} catch {
-  console.log('No git changes to commit');
-}
-
-// ── 2. Binary DB backup → R2 ─────────────────────────────────────────────────
-
-db.close(); // flush WAL before reading the file
-
-const r2 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId:     process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
-  }
-});
-
-const date   = new Date().toISOString().slice(0, 10);
-const key    = `backups/posts-${date}.db`;
-const buffer = readFileSync(DB_PATH);
-
-await r2.send(new PutObjectCommand({
-  Bucket:      process.env.R2_BUCKET,
-  Key:         key,
-  Body:        buffer,
-  ContentType: 'application/octet-stream'
-}));
-
-console.log(`Uploaded DB backup to R2: ${key}`);
-```
+The script runs under `tsx` in production. See `scripts/export-and-backup.ts`
+for the current source.
 
 ### Cron
 

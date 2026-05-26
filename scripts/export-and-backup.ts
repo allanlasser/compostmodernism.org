@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import AdmZip from 'adm-zip';
 import {
 	PutObjectCommand,
 	S3Client,
@@ -30,31 +30,33 @@ export function renderFrontmatter(post: Post): string {
 	return lines.join('\n');
 }
 
-export function archivePath(post: Post): string {
+export function archiveEntryPath(post: Post): string {
 	const { year, month, day } = dateParts(post.created_at);
-	return join('archive', year, month, day, `${post.slug}.md`);
+	return `posts/${year}/${month}/${day}/${post.slug}.md`;
 }
 
-export async function exportPosts(posts: Post[], rootDir: string): Promise<number> {
+export function archiveFilename(date: Date): string {
+	return `${date.toISOString().slice(0, 10)}.zip`;
+}
+
+export function r2Key(date: Date): string {
+	return `backups/${archiveFilename(date)}`;
+}
+
+export function buildArchive(posts: Post[], dbBytes: Buffer): Buffer {
+	const zip = new AdmZip();
+	zip.addFile('posts.db', dbBytes);
 	for (const post of posts) {
-		const rel = archivePath(post);
-		const absolute = join(rootDir, rel);
-		mkdirSync(dirname(absolute), { recursive: true });
-		writeFileSync(absolute, renderFrontmatter(post), 'utf8');
+		zip.addFile(archiveEntryPath(post), Buffer.from(renderFrontmatter(post), 'utf8'));
 	}
-	return posts.length;
-}
-
-export function backupKey(date: Date): string {
-	const iso = date.toISOString().slice(0, 10);
-	return `backups/posts-${iso}.db`;
+	return zip.toBuffer();
 }
 
 interface S3Like {
 	send(command: PutObjectCommand): Promise<unknown>;
 }
 
-export async function backupDatabase(
+export async function uploadBackup(
 	r2: S3Like,
 	bucket: string,
 	body: Buffer,
@@ -64,7 +66,7 @@ export async function backupDatabase(
 		Bucket: bucket,
 		Key: key,
 		Body: body,
-		ContentType: 'application/octet-stream'
+		ContentType: 'application/zip'
 	};
 	await r2.send(new PutObjectCommand(input));
 }
@@ -72,27 +74,23 @@ export async function backupDatabase(
 async function main(): Promise<void> {
 	const dbPath = join(process.cwd(), 'posts.db');
 	const db = createDb(dbPath);
-
 	const posts = db.getPosts({ limit: 1_000_000 });
-	const count = await exportPosts(posts, process.cwd());
-	console.log(`Exported ${count} posts to archive/`);
-
-	try {
-		execSync('git add archive/', { stdio: 'inherit' });
-		const date = new Date().toISOString().slice(0, 10);
-		execSync(`git commit -m "chore: export posts ${date}"`, { stdio: 'inherit' });
-		execSync('git push', { stdio: 'inherit' });
-		console.log('Pushed archive to git');
-	} catch {
-		console.log('No git changes to commit');
-	}
-
 	db.raw.close();
+
+	const now = new Date();
+	const dbBytes = readFileSync(dbPath);
+	const zipBuffer = buildArchive(posts, dbBytes);
+
+	const filename = archiveFilename(now);
+	const localPath = join(process.cwd(), 'archive', filename);
+	mkdirSync(dirname(localPath), { recursive: true });
+	writeFileSync(localPath, zipBuffer);
+	console.log(`Wrote ${posts.length} posts + posts.db to ${localPath}`);
 
 	const required = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'];
 	const missing = required.filter((k) => !process.env[k]);
 	if (missing.length) {
-		console.warn(`Skipping R2 backup — missing env: ${missing.join(', ')}`);
+		console.warn(`Skipping R2 mirror — missing env: ${missing.join(', ')}`);
 		return;
 	}
 
@@ -105,9 +103,9 @@ async function main(): Promise<void> {
 		}
 	});
 
-	const key = backupKey(new Date());
-	await backupDatabase(r2, process.env.R2_BUCKET!, readFileSync(dbPath), key);
-	console.log(`Uploaded DB backup to R2: ${key}`);
+	const key = r2Key(now);
+	await uploadBackup(r2, process.env.R2_BUCKET!, zipBuffer, key);
+	console.log(`Mirrored archive to R2: ${key}`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
