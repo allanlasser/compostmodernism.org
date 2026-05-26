@@ -5,6 +5,33 @@ entries go on top.
 
 ---
 
+## The nightly archive is a zip, not a git-committed tree
+
+Phase 7 was specified as "write `archive/YYYY/MM/DD/slug.md` per post, then
+`git add archive/ && git commit && git push`" — making git the canonical
+backup surface. The script shipped that way and ran nightly for months.
+
+What it actually did: nothing. `archive/` is listed in `.gitignore`
+("Local backups — markdown export of all posts, persisted via bind mount"),
+added later when the directory was first bind-mounted into the container.
+Every nightly run logged "No git changes to commit" and the README/SPEC
+"source of truth in git" wording was load-bearing fiction.
+
+The lesson: when SPEC says "X is the durability layer", grep `.gitignore`,
+`docker-compose.yml`, and the actual script output to confirm — not just
+the prose in SPEC.md.
+
+Phase 18 (2026-05-23) replaced the per-file write + git push with a single
+`archive/YYYY-MM-DD.zip` per night (`posts.db` + a `posts/YYYY/MM/DD/slug.md`
+tree inside), mirrored to R2 at `backups/YYYY-MM-DD.zip`. Two independent
+durability surfaces, no git involvement, and each individual zip is a
+complete restore source.
+
+A side question came up about copying `static.compostmodernism.org` media
+into the archive. Rejected: Cloudflare R2 is the durability layer for
+media, and rewriting URLs in the markdown would diverge the archive from
+what's in the live DB — a one-way door for a hypothetical restore.
+
 ## Freeze shortlink tokens BEFORE changing the Sqids encoder config
 
 The short-URL service (`/p/[token]`) decodes tokens with the Sqids config in

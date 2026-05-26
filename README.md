@@ -2,8 +2,10 @@
 
 A small personal blog. SvelteKit + SQLite, deployed in Docker behind a shared
 Caddy gateway. Posts are written from iOS Shortcuts or a password-protected
-`/admin` page; images and nightly DB backups land in Cloudflare R2; the
-canonical post archive is exported nightly to markdown files.
+`/admin` page; images live in Cloudflare R2; and every night the full post
+archive (markdown files + a copy of `posts.db`) is bundled into a single
+`YYYY-MM-DD.zip` on the VPS bind mount and mirrored to R2 as insurance against
+`posts.db` going away.
 
 `PLAN.md` is the phase-by-phase build log. `SPEC.md` is the design document.
 This file is the architectural overview — what the running app actually is.
@@ -17,7 +19,7 @@ This file is the architectural overview — what the running app actually is.
 | Data store | SQLite via `better-sqlite3` (single file: `posts.db`) |
 | Schema management | Versioned SQL files in `migrations/`, applied by `src/lib/migrate.ts` on every connection |
 | Image pipeline | `sharp` — EXIF stripped, max 1600×1600, converted to WebP |
-| Object storage | Cloudflare R2 via `@aws-sdk/client-s3` (images + nightly DB backups) |
+| Object storage | Cloudflare R2 via `@aws-sdk/client-s3` (images + nightly archive mirror) |
 | Markdown | `marked` (rendered server-side at request time) |
 | Short IDs | `sqids` — reversible, hash-like tokens for `/p/[token]` short URLs |
 | RSS | `feed` — full-text RSS 2.0 at `/feeds/posts.xml` |
@@ -59,7 +61,7 @@ This file is the architectural overview — what the running app actually is.
 │   ├── app.html, app.css, app.d.ts
 ├── scripts/
 │   ├── init-db.ts                # One-shot: open posts.db so migrations run
-│   ├── export-and-backup.ts      # Nightly markdown export → archive/, then DB → R2
+│   ├── export-and-backup.ts      # Nightly archive/YYYY-MM-DD.zip (posts.db + markdown), mirrored to R2
 │   ├── freeze-shortlink-tokens.ts # One-shot: persist current short tokens before changing Sqids config
 │   ├── seed.ts                   # Local-only fixture data
 │   └── fixtures.ts
@@ -94,10 +96,11 @@ This file is the architectural overview — what the running app actually is.
    rows. A slug *can* be changed: the old `(year, month, day, slug)` tuple is
    recorded in `slug_redirects` and the single-post loader 301s old URLs to the
    post's new canonical path on next visit.
-4. **Archive** — nightly cron runs `scripts/export-and-backup.ts`: writes
-   `archive/YYYY/MM/DD/slug.md` with YAML frontmatter for every post (idempotent —
-   re-runs overwrite), then `PutObject`s `posts.db` to R2 under
-   `backups/posts-YYYY-MM-DD.db`.
+4. **Archive** — nightly cron runs `scripts/export-and-backup.ts`: bundles
+   `posts.db` plus a `posts/YYYY/MM/DD/slug.md` tree (YAML frontmatter per
+   post) into a single `archive/YYYY-MM-DD.zip` on the bind mount, then
+   `PutObject`s the same zip to R2 under `backups/YYYY-MM-DD.zip`. The two
+   surfaces are independent — either alone is a complete restore source.
 
 ### Post types
 
@@ -151,9 +154,12 @@ table, no sessions table, no auth library — the cookie value is the secret its
 - **`posts.db`** — single SQLite file, baked into the container's working directory.
   Volume-mounted in `docker-compose.yml` so it survives redeploys.
 - **Cloudflare R2** — two prefixes in one bucket: `images/` (public, served at
-  `R2_PUBLIC_URL`) and `backups/` (private, 90-day lifecycle rule).
-- **`archive/`** — git-tracked markdown export. Source of truth if `posts.db` is ever
-  lost; not currently re-imported on boot, but the format is stable enough to do so.
+  `R2_PUBLIC_URL`) and `backups/` (private, 90-day lifecycle rule — receives
+  the nightly `YYYY-MM-DD.zip`).
+- **`archive/`** — gitignored bind-mount directory on the VPS holding one
+  `YYYY-MM-DD.zip` per nightly run. Each zip contains a copy of `posts.db`
+  alongside a `posts/YYYY/MM/DD/slug.md` tree, so any single archive is a
+  complete restore source. The same file is mirrored to R2.
 
 ## Local development
 

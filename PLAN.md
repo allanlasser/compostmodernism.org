@@ -1342,6 +1342,70 @@ test: create mode with blank slug → POST payload omits the slug field
 
 ---
 
+## Phase 18 — Archive as Single Zip + DB Bundle
+
+**Goal:** Replace the per-file markdown export with a single
+`YYYY-MM-DD.zip` per nightly run, containing the markdown tree **and**
+a copy of `posts.db`. R2 mirror uses the same basename under `backups/`.
+
+**Background.** Phase 7 wrote individual `archive/YYYY/MM/DD/slug.md`
+files and then `git add archive/ && git commit && git push` to make
+git the durability layer. But `archive/` is listed in `.gitignore`
+("Local backups — markdown export of all posts, persisted via bind
+mount"), so the git step was a no-op — every nightly run logged
+"No git changes to commit" and the README/SPEC "source of truth in
+git" wording was already stale. The bind-mount + R2 backup are the
+real durability surfaces; collapsing to one bundle on both makes the
+recovery story trivial (`unzip 2026-05-21.zip` → `posts.db` + readable
+markdown).
+
+The DB now travels inside the zip, so the standalone
+`backups/posts-YYYY-MM-DD.db` R2 upload from Phase 7 is dropped.
+
+File: `scripts/export-and-backup.ts`
+Tests: `scripts/export-and-backup.test.ts`
+Dep: `adm-zip` + `@types/adm-zip` (devDependencies — only the script uses it).
+
+### Red → Green cycles
+
+#### Path inside the zip
+```
+test: archiveEntryPath returns posts/YYYY/MM/DD/slug.md
+test: zero-pads single-digit month and day
+```
+
+#### Bundle construction
+```
+test: buildArchive emits a posts.db entry with the given bytes
+test: buildArchive emits posts/YYYY/MM/DD/slug.md per post with frontmatter body
+test: buildArchive with zero posts still emits posts.db (db-only snapshot)
+```
+
+#### Naming
+```
+test: archiveFilename(date) → YYYY-MM-DD.zip (UTC)
+test: r2Key(date) → backups/YYYY-MM-DD.zip (UTC)
+```
+
+#### R2 upload (mock S3Client)
+```
+test: PutObjectCommand called with bucket, r2Key, zip buffer, ContentType application/zip
+```
+
+### Checkpoint 18
+
+- [ ] `npm test` — all export/backup tests pass
+- [ ] `npx tsx scripts/export-and-backup.ts` (with real `.env`) — writes
+      `archive/YYYY-MM-DD.zip`; `unzip -l` shows `posts.db` + the
+      `posts/` tree
+- [ ] Old per-file `.md` outputs are not regenerated (the per-day zip
+      is the only artifact)
+- [ ] R2 receives `backups/YYYY-MM-DD.zip`; no standalone `.db` upload
+      happens
+- [ ] README, SPEC, NOTES updated in the same commit
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

@@ -1,14 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import AdmZip from 'adm-zip';
 import {
 	SITE_ORIGIN,
-	archivePath,
-	backupDatabase,
-	backupKey,
-	exportPosts,
-	renderFrontmatter
+	archiveEntryPath,
+	archiveFilename,
+	buildArchive,
+	r2Key,
+	renderFrontmatter,
+	uploadBackup
 } from './export-and-backup';
 import type { Post } from '../src/lib/db';
 
@@ -77,93 +76,87 @@ describe('renderFrontmatter', () => {
 	});
 });
 
-describe('archivePath', () => {
-	it('uses archive/YYYY/MM/DD/slug.md', () => {
-		expect(archivePath(post({ slug: 'hello-world' }))).toBe(
-			join('archive', '2024', '07', '01', 'hello-world.md')
+describe('archiveEntryPath', () => {
+	it('uses posts/YYYY/MM/DD/slug.md (forward slashes, zip-internal)', () => {
+		expect(archiveEntryPath(post({ slug: 'hello-world' }))).toBe(
+			'posts/2024/07/01/hello-world.md'
 		);
 	});
 
 	it('zero-pads single-digit month and day', () => {
-		expect(archivePath(post({ created_at: Date.UTC(2024, 0, 5, 12) }))).toBe(
-			join('archive', '2024', '01', '05', 'hello-world.md')
+		expect(archiveEntryPath(post({ created_at: Date.UTC(2024, 0, 5, 12) }))).toBe(
+			'posts/2024/01/05/hello-world.md'
 		);
 	});
 });
 
-describe('exportPosts', () => {
-	let root: string;
+describe('buildArchive', () => {
+	const dbBytes = Buffer.from('SQLite format 3\0fake-db-bytes');
 
-	beforeEach(() => {
-		root = mkdtempSync(join(tmpdir(), 'cm-export-'));
+	it('includes a posts.db entry with the given bytes', () => {
+		const zipBuf = buildArchive([], dbBytes);
+		const entry = new AdmZip(zipBuf).getEntry('posts.db');
+		expect(entry).not.toBeNull();
+		expect(entry!.getData().equals(dbBytes)).toBe(true);
 	});
 
-	afterEach(() => {
-		rmSync(root, { recursive: true, force: true });
+	it('emits one entry per post under posts/YYYY/MM/DD/slug.md with rendered frontmatter', () => {
+		const zipBuf = buildArchive([post()], dbBytes);
+		const zip = new AdmZip(zipBuf);
+		const entry = zip.getEntry('posts/2024/07/01/hello-world.md');
+		expect(entry).not.toBeNull();
+		const body = entry!.getData().toString('utf8');
+		expect(body).toContain('slug: hello-world');
+		expect(body).toContain('Body text.');
 	});
 
-	it('writes a file per post under the root directory', async () => {
-		await exportPosts([post()], root);
-		const target = join(root, 'archive/2024/07/01/hello-world.md');
-		expect(existsSync(target)).toBe(true);
-		expect(readFileSync(target, 'utf8')).toContain('slug: hello-world');
+	it('emits multiple post entries when given multiple posts', () => {
+		const second = post({ id: 2, slug: 'second', created_at: Date.UTC(2024, 6, 2, 12) });
+		const zipBuf = buildArchive([post(), second], dbBytes);
+		const zip = new AdmZip(zipBuf);
+		expect(zip.getEntry('posts/2024/07/01/hello-world.md')).not.toBeNull();
+		expect(zip.getEntry('posts/2024/07/02/second.md')).not.toBeNull();
 	});
 
-	it('creates intermediate directories', async () => {
-		await exportPosts([post({ created_at: Date.UTC(2099, 11, 31, 12) })], root);
-		expect(existsSync(join(root, 'archive/2099/12/31/hello-world.md'))).toBe(true);
-	});
-
-	it('overwrites an existing file on re-run', async () => {
-		await exportPosts([post({ body: 'original' })], root);
-		await exportPosts([post({ body: 'updated' })], root);
-		const target = join(root, 'archive/2024/07/01/hello-world.md');
-		expect(readFileSync(target, 'utf8')).toContain('updated');
-		expect(readFileSync(target, 'utf8')).not.toContain('original');
-	});
-
-	it('returns the count of posts written', async () => {
-		const count = await exportPosts(
-			[post(), post({ id: 2, slug: 'second', created_at: Date.UTC(2024, 6, 2, 12) })],
-			root
-		);
-		expect(count).toBe(2);
-	});
-
-	it('does not touch unrelated files in the root', async () => {
-		const sibling = join(root, 'unrelated.txt');
-		writeFileSync(sibling, 'leave me alone', 'utf8');
-		await exportPosts([post()], root);
-		expect(readFileSync(sibling, 'utf8')).toBe('leave me alone');
+	it('with zero posts still emits posts.db (db-only snapshot)', () => {
+		const zipBuf = buildArchive([], dbBytes);
+		const zip = new AdmZip(zipBuf);
+		const names = zip.getEntries().map((e) => e.entryName);
+		expect(names).toEqual(['posts.db']);
 	});
 });
 
-describe('backupKey', () => {
-	it('formats backups/posts-YYYY-MM-DD.db from a Date', () => {
-		expect(backupKey(new Date('2024-07-01T12:34:56Z'))).toBe('backups/posts-2024-07-01.db');
+describe('archiveFilename', () => {
+	it('formats YYYY-MM-DD.zip from a Date', () => {
+		expect(archiveFilename(new Date('2024-07-01T12:34:56Z'))).toBe('2024-07-01.zip');
 	});
 
 	it('uses UTC date components', () => {
-		// 23:30 in UTC-5 is still 04:30 UTC the next day — UTC wins.
-		expect(backupKey(new Date('2024-07-01T23:30:00-05:00'))).toBe('backups/posts-2024-07-02.db');
+		expect(archiveFilename(new Date('2024-07-01T23:30:00-05:00'))).toBe('2024-07-02.zip');
 	});
 });
 
-describe('backupDatabase', () => {
-	it('sends a PutObjectCommand with bucket, key, body, and content type', async () => {
+describe('r2Key', () => {
+	it('returns backups/YYYY-MM-DD.zip — same basename as on disk', () => {
+		expect(r2Key(new Date('2024-07-01T12:00:00Z'))).toBe('backups/2024-07-01.zip');
+	});
+});
+
+describe('uploadBackup', () => {
+	it('sends a PutObjectCommand with bucket, key, body, and application/zip', async () => {
 		const send = vi.fn().mockResolvedValue({});
-		const buffer = Buffer.from('SQLite format 3\0');
-		await backupDatabase(
-			{ send } as unknown as Parameters<typeof backupDatabase>[0],
+		const buffer = Buffer.from('PK\x03\x04zip-bytes');
+		await uploadBackup(
+			{ send } as unknown as Parameters<typeof uploadBackup>[0],
 			'compostmodernism',
 			buffer,
-			'backups/posts-2024-07-01.db'
+			'backups/2024-07-01.zip'
 		);
 		expect(send).toHaveBeenCalledOnce();
 		const cmd = send.mock.calls[0][0];
 		expect(cmd.input.Bucket).toBe('compostmodernism');
-		expect(cmd.input.Key).toBe('backups/posts-2024-07-01.db');
+		expect(cmd.input.Key).toBe('backups/2024-07-01.zip');
 		expect(cmd.input.Body).toBe(buffer);
-		expect(cmd.input.ContentType).toBe('application/octet-stream');
+		expect(cmd.input.ContentType).toBe('application/zip');
 	});
 });
