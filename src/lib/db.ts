@@ -341,6 +341,19 @@ export function createDb(path: string) {
 		return row ? hydrate(row) : null;
 	}
 
+	function getPostCadence(days: number = 365): { date: string; count: number }[] {
+		const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+		return raw
+			.prepare(
+				`SELECT date(created_at / 1000, 'unixepoch') as date, COUNT(*) as count
+				 FROM posts
+				 WHERE created_at >= ?
+				 GROUP BY date
+				 ORDER BY date`
+			)
+			.all(cutoff) as { date: string; count: number }[];
+	}
+
 	function updatePost(slug: string, update: PostUpdate): void {
 		const existing = raw
 			.prepare('SELECT id, slug, created_at FROM posts WHERE slug = ?')
@@ -392,6 +405,7 @@ export function createDb(path: string) {
 		getPostById,
 		getPostsByTag,
 		getAllTags,
+		getPostCadence,
 		updatePost,
 		deletePost,
 		slugTaken,
@@ -447,3 +461,4 @@ export const touchImage: Db['touchImage'] = (id) => defaultDb().touchImage(id);
 export const deleteImage: Db['deleteImage'] = (id) => defaultDb().deleteImage(id);
 export const setPostImages: Db['setPostImages'] = (postId, body) =>
 	defaultDb().setPostImages(postId, body);
+export const getPostCadence: Db['getPostCadence'] = (days) => defaultDb().getPostCadence(days);

@@ -2,10 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { load } from './+page.server';
 
 describe('admin index loader', () => {
-	it('redirects to /admin/posts', async () => {
-		await expect(load({} as never)).rejects.toMatchObject({
-			status: 303,
-			location: '/admin/posts'
-		});
+	it('returns cadence data', async () => {
+		const result = await load({} as never) as { cadence: unknown[] };
+		expect(result).toHaveProperty('cadence');
+		expect(Array.isArray(result.cadence)).toBe(true);
 	});
 });
