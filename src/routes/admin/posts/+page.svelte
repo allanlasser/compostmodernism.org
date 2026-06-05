@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PostsTable from '$lib/components/admin/PostsTable.svelte';
+	import CadenceGraph from '$lib/components/admin/CadenceGraph.svelte';
 
 	interface AdminPost {
 		slug: string;
@@ -17,11 +18,14 @@
 			perPage: number;
 			total: number;
 			totalPages: number;
+			cadence: { date: string; count: number }[];
 		};
 	}
 
 	let { data }: Props = $props();
 </script>
+
+<CadenceGraph cadence={data.cadence} />
 
 <header class="posts-header">
   <p class="status">{data.total} {data.total === 1 ? 'post' : 'posts'}</p>
