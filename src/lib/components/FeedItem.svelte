@@ -105,7 +105,7 @@
 		display: grid;
 		grid-template-columns: 1fr var(--space-rail);
 		gap: var(--space-gap);
-    align-items: baseline;
+		align-items: start;
 		width: 100%;
 	}
 
@@ -143,6 +143,10 @@
 	.body :global(img.is-tapped) {
 		opacity: 1;
 	}
+
+  .body :global(p img) {
+    margin: 0;
+  }
 
 	.body :global(a img) {
 		cursor: pointer;
