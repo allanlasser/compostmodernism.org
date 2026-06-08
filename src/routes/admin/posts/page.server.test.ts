@@ -6,14 +6,16 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 vi.mock('$lib/db', () => ({
 	getPosts: vi.fn(),
-	countPosts: vi.fn()
+	countPosts: vi.fn(),
+	getPostCadence: vi.fn()
 }));
 
 import { load, _PER_PAGE } from './+page.server';
-import { getPosts, countPosts } from '$lib/db';
+import { getPosts, countPosts, getPostCadence } from '$lib/db';
 
 const mockGetPosts = vi.mocked(getPosts);
 const mockCountPosts = vi.mocked(countPosts);
+const mockGetPostCadence = vi.mocked(getPostCadence);
 
 function makePost(over: Partial<Post> = {}): Post {
 	const created_at = Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -38,6 +40,7 @@ function makeEvent(search = '') {
 beforeEach(() => {
 	mockGetPosts.mockReset();
 	mockCountPosts.mockReset();
+	mockGetPostCadence.mockReturnValue([]);
 });
 
 describe('admin posts loader', () => {

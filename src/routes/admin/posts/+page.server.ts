@@ -1,5 +1,5 @@
 import type { ServerLoad } from '@sveltejs/kit';
-import { getPosts, countPosts } from '$lib/db';
+import { getPosts, countPosts, getPostCadence } from '$lib/db';
 import { permalink } from '$lib/slug';
 
 export const _PER_PAGE = 25;
@@ -18,6 +18,7 @@ export const load: ServerLoad = async ({ url }) => {
 		page,
 		perPage: _PER_PAGE,
 		total,
-		totalPages
+		totalPages,
+		cadence: getPostCadence()
 	};
 };

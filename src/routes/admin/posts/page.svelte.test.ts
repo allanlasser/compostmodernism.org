@@ -16,7 +16,7 @@ const post = {
 describe('admin posts page', () => {
 	it('renders a New post link and the posts table', () => {
 		const { getByRole, container } = render(Page, {
-			props: { data: { posts: [post], page: 1, perPage: 25, total: 1, totalPages: 1 } }
+			props: { data: { posts: [post], page: 1, perPage: 25, total: 1, totalPages: 1, cadence: [] } }
 		});
 		const link = getByRole('link', { name: '+ New post' });
 		expect(link).toHaveProperty('href', expect.stringContaining('/admin/posts/new'));
@@ -25,7 +25,7 @@ describe('admin posts page', () => {
 
 	it('shows Page X of Y with Prev/Next links when totalPages > 1', () => {
 		const { container, getByText } = render(Page, {
-			props: { data: { posts: [post], page: 2, perPage: 25, total: 60, totalPages: 3 } }
+			props: { data: { posts: [post], page: 2, perPage: 25, total: 60, totalPages: 3, cadence: [] } }
 		});
 		expect(getByText(/Page 2 of 3/)).not.toBeNull();
 		expect(container.querySelector('a[href="?page=1"]')).not.toBeNull();
@@ -34,7 +34,7 @@ describe('admin posts page', () => {
 
 	it('disables Prev on the first page and Next on the last page', () => {
 		const { container } = render(Page, {
-			props: { data: { posts: [post], page: 1, perPage: 25, total: 30, totalPages: 2 } }
+			props: { data: { posts: [post], page: 1, perPage: 25, total: 30, totalPages: 2, cadence: [] } }
 		});
 		expect(container.querySelector('a[rel="prev"]')).toBeNull();
 		expect(container.querySelector('a[rel="next"]')).not.toBeNull();
@@ -42,7 +42,7 @@ describe('admin posts page', () => {
 
 	it('hides the pager entirely on a single-page result', () => {
 		const { container } = render(Page, {
-			props: { data: { posts: [post], page: 1, perPage: 25, total: 1, totalPages: 1 } }
+			props: { data: { posts: [post], page: 1, perPage: 25, total: 1, totalPages: 1, cadence: [] } }
 		});
 		expect(container.querySelector('.pager')).toBeNull();
 	});
