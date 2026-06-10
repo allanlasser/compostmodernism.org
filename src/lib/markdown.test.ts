@@ -40,4 +40,31 @@ describe('renderMarkdown', () => {
 	it('returns empty string for empty input (no spurious <p></p>)', () => {
 		expect(renderMarkdown('').trim()).toBe('');
 	});
+
+	describe('smartquotes', () => {
+		it('converts straight double quotes to curly quotes', () => {
+			const html = renderMarkdown('"Hello world"');
+			expect(html).toContain('“Hello world”');
+		});
+
+		it('converts apostrophes to right single quotes', () => {
+			expect(renderMarkdown("it's a test")).toContain('it’s');
+		});
+
+		it('does not transform quotes inside inline code spans', () => {
+			const html = renderMarkdown('`"code"`');
+			// marked HTML-encodes straight quotes inside <code>; curly quotes must not appear
+			expect(html).toContain('&quot;code&quot;');
+		});
+
+		it('does not transform quotes inside fenced code blocks', () => {
+			const html = renderMarkdown('```\n"block"\n```');
+			expect(html).toContain('&quot;block&quot;');
+		});
+
+		it('does not alter image src attribute values', () => {
+			const html = renderMarkdown('![alt](https://example.com/image.webp)');
+			expect(html).toMatch(/src="https:\/\/example\.com\/image\.webp"/);
+		});
+	});
 });
