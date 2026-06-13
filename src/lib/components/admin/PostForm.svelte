@@ -251,8 +251,8 @@
 
 {#if imageModalOpen}
 	<ImageUploadModal
-		onInsert={(url) => {
-			insertImageMarkdown(url);
+		onInsert={(urls) => {
+			for (const url of urls) insertImageMarkdown(url);
 			imageModalOpen = false;
 		}}
 		onClose={() => (imageModalOpen = false)}
