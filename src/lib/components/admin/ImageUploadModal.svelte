@@ -1,36 +1,58 @@
 <script lang="ts">
 	interface Props {
-		onInsert: (url: string) => void;
+		onInsert: (urls: string[]) => void;
 		onClose: () => void;
 	}
 
 	let { onInsert, onClose }: Props = $props();
 
-	let file = $state<File | null>(null);
+	let files = $state<File[]>([]);
 	let uploading = $state(false);
+	let uploadProgress = $state('');
 	let error = $state('');
 
 	function onPick(e: Event) {
 		const input = e.target as HTMLInputElement;
-		file = input.files?.[0] ?? null;
+		files = input.files ? Array.from(input.files) : [];
 		error = '';
 	}
 
 	async function upload() {
-		if (!file || uploading) return;
+		if (!files.length || uploading) return;
 		uploading = true;
 		error = '';
-		const form = new FormData();
-		form.append('image', file);
-		const res = await fetch('/api/upload', { method: 'POST', body: form });
-		uploading = false;
-		if (!res.ok) {
-			error = 'Upload failed.';
-			return;
+		const urls: string[] = [];
+		const failed: string[] = [];
+
+		for (let i = 0; i < files.length; i++) {
+			uploadProgress = files.length > 1
+				? `Uploading ${i + 1} of ${files.length}…`
+				: 'Uploading…';
+			const form = new FormData();
+			form.append('image', files[i]);
+			try {
+				const res = await fetch('/api/upload', { method: 'POST', body: form });
+				if (!res.ok) {
+					failed.push(files[i].name);
+					continue;
+				}
+				const json = (await res.json()) as { url?: string };
+				if (json.url) urls.push(json.url);
+				else failed.push(files[i].name);
+			} catch {
+				failed.push(files[i].name);
+			}
 		}
-		const json = (await res.json()) as { url?: string };
-		if (json.url) onInsert(json.url);
-		else error = 'Server did not return a URL.';
+
+		uploading = false;
+		uploadProgress = '';
+
+		if (failed.length) {
+			error = `Upload failed for ${failed.join(', ')}`;
+		}
+		if (urls.length) {
+			onInsert(urls);
+		}
 	}
 
 	function onBackdropClick(e: MouseEvent) {
@@ -40,6 +62,14 @@
 	function onKey(e: KeyboardEvent) {
 		if (e.key === 'Escape' && !uploading) onClose();
 	}
+
+	let pickerLabel = $derived(
+		files.length === 0
+			? 'Choose files…'
+			: files.length === 1
+				? files[0].name
+				: `${files.length} files selected`
+	);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -59,16 +89,16 @@
 		</header>
 
 		<label class="pick">
-			<input type="file" accept="image/*" onchange={onPick} disabled={uploading} />
-			<span>{file ? file.name : 'Choose a file…'}</span>
+			<input type="file" accept="image/*" multiple onchange={onPick} disabled={uploading} />
+			<span>{pickerLabel}</span>
 		</label>
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
 
 		<div class="actions">
 			<button type="button" class="link" onclick={onClose} disabled={uploading}>Cancel</button>
-			<button type="button" onclick={upload} disabled={!file || uploading}>
-				{uploading ? 'Uploading…' : 'Upload & insert'}
+			<button type="button" onclick={upload} disabled={!files.length || uploading}>
+				{uploadProgress || 'Upload & insert'}
 			</button>
 		</div>
 	</div>
