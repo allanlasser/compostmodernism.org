@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import Lightbox from './Lightbox.svelte';
 
@@ -140,6 +140,10 @@ describe('Lightbox', () => {
 	});
 
 	describe('navigation', () => {
+		beforeEach(() => {
+			vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
+		});
+
 		function addPageImages(count: number): HTMLImageElement[] {
 			const wrapper = document.createElement('div');
 			wrapper.classList.add('body');
@@ -197,7 +201,7 @@ describe('Lightbox', () => {
 			});
 			await markLoaded(container);
 			await fireEvent.keyDown(window, { key: 'ArrowRight' });
-			const img = container.querySelector('.lightbox img') as HTMLImageElement;
+			const img = container.querySelector('.lightbox img:not(.outgoing)') as HTMLImageElement;
 			expect(img.getAttribute('src')).toBe('https://images.test/1.webp');
 		});
 
@@ -208,7 +212,7 @@ describe('Lightbox', () => {
 			});
 			await markLoaded(container);
 			await fireEvent.keyDown(window, { key: 'ArrowLeft' });
-			const img = container.querySelector('.lightbox img') as HTMLImageElement;
+			const img = container.querySelector('.lightbox img:not(.outgoing)') as HTMLImageElement;
 			expect(img.getAttribute('src')).toBe('https://images.test/0.webp');
 		});
 
@@ -222,7 +226,7 @@ describe('Lightbox', () => {
 			const nextBtn = container.querySelector('.nav-next') as HTMLButtonElement;
 			await fireEvent.click(nextBtn);
 			expect(onClose).not.toHaveBeenCalled();
-			const img = container.querySelector('.lightbox img') as HTMLImageElement;
+			const img = container.querySelector('.lightbox img:not(.outgoing)') as HTMLImageElement;
 			expect(img.getAttribute('src')).toBe('https://images.test/1.webp');
 		});
 
