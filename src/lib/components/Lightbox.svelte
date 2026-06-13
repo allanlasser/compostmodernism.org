@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+
 	interface Props {
 		src: string;
 		alt: string;
@@ -12,6 +14,7 @@
 	let { src, alt, sourceRect, naturalWidth, naturalHeight, sourceEl, onClose }: Props = $props();
 
 	const TRANSITION_MS = 220;
+	const SLIDE_MS = 300;
 
 	let reducedMotion = false;
 	if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
@@ -21,6 +24,53 @@
 	let loaded = $state(false);
 	let phase = $state<'idle' | 'opening' | 'open' | 'closing'>('idle');
 	let imgEl: HTMLImageElement | undefined = $state();
+
+	let currentSrc = $state(untrack(() => src));
+	let currentAlt = $state(untrack(() => alt));
+	let currentSourceEl = $state(untrack(() => sourceEl));
+	let currentNaturalWidth = $state(untrack(() => naturalWidth));
+	let currentNaturalHeight = $state(untrack(() => naturalHeight));
+	let currentSourceRect = $state(untrack(() => sourceRect));
+
+	let allImages: HTMLImageElement[] = [];
+	let currentIndex = $state(-1);
+	let hasPrev = $derived(currentIndex > 0);
+	let hasNext = $derived(currentIndex >= 0 && currentIndex < allImages.length - 1);
+
+	type Outgoing = { src: string; alt: string; w: number; h: number };
+	let outgoing = $state<Outgoing | null>(null);
+	let slideDirection = $state<'left' | 'right'>('left');
+	let slidePhase = $state<'idle' | 'sliding'>('idle');
+
+	$effect(() => {
+		allImages = (Array.from(document.querySelectorAll('.body img')) as HTMLImageElement[])
+			.filter((img) => !img.closest('a'));
+		currentIndex = allImages.indexOf(sourceEl);
+	});
+
+	function navigate(delta: number) {
+		const newIndex = currentIndex + delta;
+		if (newIndex < 0 || newIndex >= allImages.length) return;
+		if (phase !== 'open' || slidePhase !== 'idle') return;
+
+		outgoing = { src: currentSrc, alt: currentAlt, w: target.w, h: target.h };
+		slideDirection = delta > 0 ? 'left' : 'right';
+		slidePhase = 'sliding';
+
+		const newImg = allImages[newIndex];
+		currentSrc = newImg.currentSrc || newImg.src;
+		currentAlt = newImg.alt;
+		currentSourceRect = newImg.getBoundingClientRect();
+		currentNaturalWidth = newImg.naturalWidth;
+		currentNaturalHeight = newImg.naturalHeight;
+		currentSourceEl = newImg;
+		currentIndex = newIndex;
+
+		setTimeout(() => {
+			slidePhase = 'idle';
+			outgoing = null;
+		}, SLIDE_MS);
+	}
 
 	function onImgLoad() {
 		if (loaded) return;
@@ -43,9 +93,10 @@
 
 	$effect(() => {
 		if (!loaded) return;
-		sourceEl.dataset.lightboxSource = 'true';
+		const el = currentSourceEl;
+		el.dataset.lightboxSource = 'true';
 		return () => {
-			delete sourceEl.dataset.lightboxSource;
+			delete el.dataset.lightboxSource;
 		};
 	});
 
@@ -74,8 +125,8 @@
 	let target = $derived.by(() => {
 		const maxW = viewport.w * 0.9;
 		const maxH = viewport.h * 0.9;
-		const w = naturalWidth || sourceRect.width || 1;
-		const h = naturalHeight || sourceRect.height || 1;
+		const w = currentNaturalWidth || currentSourceRect.width || 1;
+		const h = currentNaturalHeight || currentSourceRect.height || 1;
 		const aspect = w / h;
 		return maxW / aspect <= maxH
 			? { w: maxW, h: maxW / aspect }
@@ -84,9 +135,9 @@
 
 	let imgTransform = $derived.by(() => {
 		if (phase === 'open' || !target.w) return 'translate(-50%, -50%)';
-		const dx = sourceRect.left + sourceRect.width / 2 - viewport.w / 2;
-		const dy = sourceRect.top + sourceRect.height / 2 - viewport.h / 2;
-		const scale = sourceRect.width / target.w;
+		const dx = currentSourceRect.left + currentSourceRect.width / 2 - viewport.w / 2;
+		const dy = currentSourceRect.top + currentSourceRect.height / 2 - viewport.h / 2;
+		const scale = currentSourceRect.width / target.w;
 		return `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale})`;
 	});
 
@@ -102,6 +153,14 @@
 
 	function onKey(e: KeyboardEvent) {
 		if (e.key === 'Escape') dismiss();
+		if (e.key === 'ArrowLeft' && hasPrev) {
+			e.preventDefault();
+			navigate(-1);
+		}
+		if (e.key === 'ArrowRight' && hasNext) {
+			e.preventDefault();
+			navigate(1);
+		}
 	}
 </script>
 
@@ -116,20 +175,47 @@
 	role="dialog"
 	tabindex="-1"
 	aria-modal="true"
-	aria-label={alt || 'Expanded image'}
+	aria-label={currentAlt || 'Expanded image'}
 	onclick={dismiss}
 	onkeydown={() => {}}
 >
 	<div class="backdrop"></div>
+	{#if outgoing}
+		<img
+			class="outgoing"
+			class:slide-out-left={slideDirection === 'left'}
+			class:slide-out-right={slideDirection === 'right'}
+			src={outgoing.src}
+			alt=""
+			style:width="{outgoing.w}px"
+			style:height="{outgoing.h}px"
+		/>
+	{/if}
 	<img
 		bind:this={imgEl}
-		{src}
-		{alt}
+		class:slide-in-from-right={slidePhase === 'sliding' && slideDirection === 'left'}
+		class:slide-in-from-left={slidePhase === 'sliding' && slideDirection === 'right'}
+		src={currentSrc}
+		alt={currentAlt}
 		onload={onImgLoad}
 		style:width="{target.w}px"
 		style:height="{target.h}px"
 		style:transform={imgTransform}
 	/>
+	{#if hasPrev}
+		<button
+			class="nav nav-prev"
+			aria-label="Previous image"
+			onclick={(e) => { e.stopPropagation(); navigate(-1); }}
+		>&#9664;</button>
+	{/if}
+	{#if hasNext}
+		<button
+			class="nav nav-next"
+			aria-label="Next image"
+			onclick={(e) => { e.stopPropagation(); navigate(1); }}
+		>&#9654;</button>
+	{/if}
 </div>
 
 <style>
@@ -138,6 +224,8 @@
 		inset: 0;
 		z-index: 100;
 		cursor: zoom-out;
+		overflow: hidden;
+		--slide-ms: 300ms;
 	}
 
 	.backdrop {
@@ -169,10 +257,97 @@
 		opacity: 0;
 	}
 
+	.outgoing {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		display: block;
+		max-width: none;
+		border-radius: 4px;
+		pointer-events: none;
+	}
+
+	.slide-out-left {
+		animation: slide-out-left var(--slide-ms) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+
+	.slide-out-right {
+		animation: slide-out-right var(--slide-ms) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+
+	.lightbox img.slide-in-from-right {
+		animation: slide-in-from-right var(--slide-ms) cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	.lightbox img.slide-in-from-left {
+		animation: slide-in-from-left var(--slide-ms) cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	@keyframes slide-out-left {
+		from { transform: translate(-50%, -50%); }
+		to { transform: translate(calc(-50% - 100vw), -50%); }
+	}
+
+	@keyframes slide-out-right {
+		from { transform: translate(-50%, -50%); }
+		to { transform: translate(calc(-50% + 100vw), -50%); }
+	}
+
+	@keyframes slide-in-from-right {
+		from { transform: translate(calc(-50% + 100vw), -50%); }
+		to { transform: translate(-50%, -50%); }
+	}
+
+	@keyframes slide-in-from-left {
+		from { transform: translate(calc(-50% - 100vw), -50%); }
+		to { transform: translate(-50%, -50%); }
+	}
+
+	.nav {
+		position: fixed;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 101;
+		border: none;
+		background: var(--color-bg);
+		color: var(--color-ink-soft);
+		font-size: 1.25rem;
+		width: 2.5rem;
+		height: 2.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity 0.15s linear;
+	}
+
+	.nav:hover {
+		opacity: 1;
+	}
+
+	.nav-prev {
+		left: 1rem;
+	}
+
+	.nav-next {
+		right: 1rem;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.backdrop,
-		.lightbox img {
+		.lightbox img,
+		.nav {
 			transition: none;
+		}
+
+		.slide-out-left,
+		.slide-out-right,
+		.lightbox img.slide-in-from-right,
+		.lightbox img.slide-in-from-left {
+			animation: none;
 		}
 	}
 </style>
