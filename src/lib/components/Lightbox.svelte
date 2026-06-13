@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+
 	interface Props {
 		src: string;
 		alt: string;
@@ -22,6 +24,38 @@
 	let phase = $state<'idle' | 'opening' | 'open' | 'closing'>('idle');
 	let imgEl: HTMLImageElement | undefined = $state();
 
+	let currentSrc = $state(untrack(() => src));
+	let currentAlt = $state(untrack(() => alt));
+	let currentSourceEl = $state(untrack(() => sourceEl));
+	let currentNaturalWidth = $state(untrack(() => naturalWidth));
+	let currentNaturalHeight = $state(untrack(() => naturalHeight));
+	let currentSourceRect = $state(untrack(() => sourceRect));
+
+	let allImages: HTMLImageElement[] = [];
+	let currentIndex = $state(-1);
+	let hasPrev = $derived(currentIndex > 0);
+	let hasNext = $derived(currentIndex >= 0 && currentIndex < allImages.length - 1);
+
+	$effect(() => {
+		allImages = (Array.from(document.querySelectorAll('.body img')) as HTMLImageElement[])
+			.filter((img) => !img.closest('a'));
+		currentIndex = allImages.indexOf(sourceEl);
+	});
+
+	function navigate(delta: number) {
+		const newIndex = currentIndex + delta;
+		if (newIndex < 0 || newIndex >= allImages.length) return;
+
+		const newImg = allImages[newIndex];
+		currentSrc = newImg.currentSrc || newImg.src;
+		currentAlt = newImg.alt;
+		currentSourceRect = newImg.getBoundingClientRect();
+		currentNaturalWidth = newImg.naturalWidth;
+		currentNaturalHeight = newImg.naturalHeight;
+		currentSourceEl = newImg;
+		currentIndex = newIndex;
+	}
+
 	function onImgLoad() {
 		if (loaded) return;
 		loaded = true;
@@ -43,9 +77,10 @@
 
 	$effect(() => {
 		if (!loaded) return;
-		sourceEl.dataset.lightboxSource = 'true';
+		const el = currentSourceEl;
+		el.dataset.lightboxSource = 'true';
 		return () => {
-			delete sourceEl.dataset.lightboxSource;
+			delete el.dataset.lightboxSource;
 		};
 	});
 
@@ -74,8 +109,8 @@
 	let target = $derived.by(() => {
 		const maxW = viewport.w * 0.9;
 		const maxH = viewport.h * 0.9;
-		const w = naturalWidth || sourceRect.width || 1;
-		const h = naturalHeight || sourceRect.height || 1;
+		const w = currentNaturalWidth || currentSourceRect.width || 1;
+		const h = currentNaturalHeight || currentSourceRect.height || 1;
 		const aspect = w / h;
 		return maxW / aspect <= maxH
 			? { w: maxW, h: maxW / aspect }
@@ -84,9 +119,9 @@
 
 	let imgTransform = $derived.by(() => {
 		if (phase === 'open' || !target.w) return 'translate(-50%, -50%)';
-		const dx = sourceRect.left + sourceRect.width / 2 - viewport.w / 2;
-		const dy = sourceRect.top + sourceRect.height / 2 - viewport.h / 2;
-		const scale = sourceRect.width / target.w;
+		const dx = currentSourceRect.left + currentSourceRect.width / 2 - viewport.w / 2;
+		const dy = currentSourceRect.top + currentSourceRect.height / 2 - viewport.h / 2;
+		const scale = currentSourceRect.width / target.w;
 		return `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale})`;
 	});
 
@@ -102,6 +137,14 @@
 
 	function onKey(e: KeyboardEvent) {
 		if (e.key === 'Escape') dismiss();
+		if (e.key === 'ArrowLeft' && hasPrev) {
+			e.preventDefault();
+			navigate(-1);
+		}
+		if (e.key === 'ArrowRight' && hasNext) {
+			e.preventDefault();
+			navigate(1);
+		}
 	}
 </script>
 
@@ -116,20 +159,34 @@
 	role="dialog"
 	tabindex="-1"
 	aria-modal="true"
-	aria-label={alt || 'Expanded image'}
+	aria-label={currentAlt || 'Expanded image'}
 	onclick={dismiss}
 	onkeydown={() => {}}
 >
 	<div class="backdrop"></div>
 	<img
 		bind:this={imgEl}
-		{src}
-		{alt}
+		src={currentSrc}
+		alt={currentAlt}
 		onload={onImgLoad}
 		style:width="{target.w}px"
 		style:height="{target.h}px"
 		style:transform={imgTransform}
 	/>
+	{#if hasPrev}
+		<button
+			class="nav nav-prev"
+			aria-label="Previous image"
+			onclick={(e) => { e.stopPropagation(); navigate(-1); }}
+		>&#9664;</button>
+	{/if}
+	{#if hasNext}
+		<button
+			class="nav nav-next"
+			aria-label="Next image"
+			onclick={(e) => { e.stopPropagation(); navigate(1); }}
+		>&#9654;</button>
+	{/if}
 </div>
 
 <style>
@@ -169,9 +226,42 @@
 		opacity: 0;
 	}
 
+	.nav {
+		position: fixed;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 101;
+		border: none;
+		background: var(--color-bg);
+		color: var(--color-ink-soft);
+		font-size: 1.25rem;
+		width: 2.5rem;
+		height: 2.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity 0.15s linear;
+	}
+
+	.nav:hover {
+		opacity: 1;
+	}
+
+	.nav-prev {
+		left: 1rem;
+	}
+
+	.nav-next {
+		right: 1rem;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.backdrop,
-		.lightbox img {
+		.lightbox img,
+		.nav {
 			transition: none;
 		}
 	}
