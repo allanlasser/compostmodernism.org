@@ -15,17 +15,14 @@
 	const STEP = CELL + GAP;
 	const MONTH_H = 18;
 	const DAY_LABEL_W = 28;
-	const NUM_WEEKS = 52;
+	const MAX_WEEKS = 52;
 	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-	const W = DAY_LABEL_W + NUM_WEEKS * STEP - GAP;
-	const H = MONTH_H + 7 * STEP - GAP;
 
 	function getLevel(count: number): number {
 		if (count === 0) return 0;
 		if (count === 1) return 1;
 		if (count === 2) return 2;
-		if (count <= 4) return 3;
+		if (count === 3) return 3;
 		return 4;
 	}
 
@@ -41,19 +38,41 @@
 		label: string;
 	}
 
-	const { weeks, monthLabels } = $derived.by(() => {
+	const { weeks, monthLabels, width, height } = $derived.by(() => {
 		const countMap = new Map<string, number>(cadence.map(({ date, count }) => [date, count]));
 
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
 
-		const start = new Date(today);
-		start.setDate(start.getDate() - NUM_WEEKS * 7);
-		start.setDate(start.getDate() - start.getDay()); // back to Sunday
+		let start: Date;
+		let numWeeks: number;
+
+		if (cadence.length === 0) {
+			start = new Date(today);
+			start.setDate(start.getDate() - start.getDay());
+			numWeeks = 1;
+		} else {
+			const earliest = new Date(cadence[0].date + 'T00:00:00');
+			const monthStart = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+
+			const trailingStart = new Date(today);
+			trailingStart.setDate(trailingStart.getDate() - MAX_WEEKS * 7);
+			trailingStart.setDate(trailingStart.getDate() - trailingStart.getDay());
+
+			if (monthStart <= trailingStart) {
+				start = trailingStart;
+				numWeeks = MAX_WEEKS;
+			} else {
+				start = new Date(monthStart);
+				start.setDate(start.getDate() - start.getDay());
+				const daySpan = Math.ceil((today.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+				numWeeks = Math.ceil(daySpan / 7);
+			}
+		}
 
 		const weeks: GridCell[][] = [];
 		const cur = new Date(start);
-		while (weeks.length < NUM_WEEKS) {
+		while (weeks.length < numWeeks) {
 			const week: GridCell[] = [];
 			for (let d = 0; d < 7; d++) {
 				const dateStr = cur.toISOString().slice(0, 10);
@@ -81,7 +100,10 @@
 			}
 		});
 
-		return { weeks, monthLabels };
+		const width = DAY_LABEL_W + numWeeks * STEP - GAP;
+		const height = MONTH_H + 7 * STEP - GAP;
+
+		return { weeks, monthLabels, width, height };
 	});
 
 	function cellFill(level: number): string {
@@ -105,10 +127,10 @@
 
 <div class="cadence-wrap">
 	<svg
-		width={W}
-		height={H}
-		viewBox="0 0 {W} {H}"
-		aria-label="Posting cadence for the past year"
+		width={width}
+		height={height}
+		viewBox="0 0 {width} {height}"
+		aria-label="Posting cadence"
 		role="img"
 	>
 		{#each monthLabels as { x, label }}
