@@ -813,21 +813,21 @@ describe('getPostCadence', () => {
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('a', 'x', d1);
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('b', 'x', d1);
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('c', 'x', d2);
-		const result = db.getPostCadence(365 * 2);
+		const result = db.getPostCadence();
 		expect(result).toEqual([
 			{ date: '2025-01-10', count: 2 },
 			{ date: '2025-01-11', count: 1 }
 		]);
 	});
 
-	it('excludes posts older than the requested window', () => {
+	it('includes all posts regardless of age', () => {
 		const old = new Date('2000-01-01T12:00:00Z').getTime();
 		const recent = Date.now() - 1000;
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('old', 'x', old);
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('new', 'x', recent);
-		const result = db.getPostCadence(7);
-		expect(result.every((r) => r.date >= new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10))).toBe(true);
-		expect(result.some((r) => r.date.startsWith('2000'))).toBe(false);
+		const result = db.getPostCadence();
+		expect(result.some((r) => r.date.startsWith('2000'))).toBe(true);
+		expect(result.length).toBe(2);
 	});
 
 	it('returns dates in ascending order', () => {
@@ -837,7 +837,7 @@ describe('getPostCadence', () => {
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('p1', 'x', t1);
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('p2', 'x', t2);
 		db.raw.prepare('INSERT INTO posts (slug, body, created_at) VALUES (?, ?, ?)').run('p3', 'x', t3);
-		const result = db.getPostCadence(365 * 2);
+		const result = db.getPostCadence();
 		const dates = result.map((r) => r.date);
 		expect(dates).toEqual([...dates].sort());
 	});
