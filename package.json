@@ -12,7 +12,11 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "import:sanity": "tsx --env-file=.env.local scripts/import-sanity.ts",
+    "import:dry": "tsx --env-file=.env.local scripts/import-sanity.ts --dry-run",
+    "validate:import": "tsx --env-file=.env.local scripts/validate-import.ts",
+    "publish:drafts": "tsx scripts/publish-drafts.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -30,6 +34,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@sanity/client": "^7.23.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",

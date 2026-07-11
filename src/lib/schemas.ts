@@ -23,7 +23,9 @@ export const postInputSchema = z.object({
 		.array(z.unknown())
 		.optional()
 		.default([])
-		.transform((arr) => arr.filter(isNonEmptyString).map((s) => s.trim()))
+		.transform((arr) => arr.filter(isNonEmptyString).map((s) => s.trim())),
+	created_at: z.number().int().positive().optional(),
+	draft: z.union([z.literal(0), z.literal(1)]).optional()
 });
 
 export type PostInputInput = z.input<typeof postInputSchema>;
@@ -35,7 +37,8 @@ export const postUpdateSchema = z.object({
 	url: z.string().trim().nullable().optional(),
 	tags: z.array(z.string().trim()).optional(),
 	slug: slugSchema.optional(),
-	created_at: z.number().int().positive().optional()
+	created_at: z.number().int().positive().optional(),
+	draft: z.union([z.literal(0), z.literal(1)]).optional()
 });
 
 export type PostUpdateInput = z.input<typeof postUpdateSchema>;

@@ -802,6 +802,57 @@ describe('deleteImage', () => {
 	});
 });
 
+describe('draft posts', () => {
+	it('insertPost with draft: 1 stores draft flag', () => {
+		const { slug } = db.insertPost({ body: 'hidden', draft: 1 });
+		const row = db.raw.prepare('SELECT draft FROM posts WHERE slug = ?').get(slug) as { draft: number };
+		expect(row.draft).toBe(1);
+	});
+
+	it('getPosts excludes draft posts', () => {
+		db.insertPost({ body: 'published' });
+		db.insertPost({ body: 'hidden', draft: 1 });
+		const posts = db.getPosts();
+		expect(posts.every((p) => p.draft === 0)).toBe(true);
+		expect(posts.some((p) => p.body === 'hidden')).toBe(false);
+	});
+
+	it('countPosts excludes draft posts', () => {
+		db.insertPost({ body: 'published' });
+		db.insertPost({ body: 'hidden', draft: 1 });
+		expect(db.countPosts()).toBe(1);
+	});
+
+	it('getDraftPosts returns only draft posts', () => {
+		db.insertPost({ body: 'published' });
+		db.insertPost({ body: 'hidden', draft: 1 });
+		const drafts = db.getDraftPosts();
+		expect(drafts).toHaveLength(1);
+		expect(drafts[0].body).toBe('hidden');
+		expect(drafts[0].draft).toBe(1);
+	});
+
+	it('updatePost can flip draft to 0 (publish)', () => {
+		const { slug } = db.insertPost({ body: 'hidden', draft: 1 });
+		db.updatePost(slug, { body: 'hidden', draft: 0 });
+		expect(db.getPosts().some((p) => p.slug === slug)).toBe(true);
+		expect(db.getDraftPosts().some((p) => p.slug === slug)).toBe(false);
+	});
+
+	it('insertPost defaults draft to 0', () => {
+		const { slug } = db.insertPost({ body: 'normal' });
+		const row = db.raw.prepare('SELECT draft FROM posts WHERE slug = ?').get(slug) as { draft: number };
+		expect(row.draft).toBe(0);
+	});
+
+	it('insertPost accepts created_at for backdating', () => {
+		const past = new Date('2023-05-14T12:00:00Z').getTime();
+		const { slug } = db.insertPost({ body: 'old post', created_at: past });
+		const post = db.getPostBySlug(slug);
+		expect(post?.created_at).toBe(past);
+	});
+});
+
 describe('getPostCadence', () => {
 	it('returns empty array when no posts', () => {
 		expect(db.getPostCadence()).toEqual([]);

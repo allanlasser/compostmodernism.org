@@ -14,7 +14,7 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
 	}
 
-	const { body, title, url, tags, slug } = parsed.data;
+	const { body, title, url, tags, slug, created_at, draft } = parsed.data;
 
 	if (url && !title) {
 		return json({ error: 'title is required when url is provided' }, { status: 400 });
@@ -24,10 +24,11 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: `slug "${slug}" is already in use by another post` }, { status: 409 });
 	}
 
-	const result = insertPost({ body, title, url, tags, slug });
+	const result = insertPost({ body, title, url, tags, slug, created_at, draft });
+	const ts = created_at ?? Date.now();
 
 	return json(
-		{ ok: true, slug: result.slug, permalink: permalink({ slug: result.slug, created_at: Date.now() }) },
+		{ ok: true, slug: result.slug, permalink: permalink({ slug: result.slug, created_at: ts }) },
 		{ status: 201 }
 	);
 };

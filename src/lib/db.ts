@@ -24,6 +24,7 @@ export interface PostRow {
 	title: string | null;
 	url: string | null;
 	created_at: number;
+	draft: number;
 }
 
 export interface Post extends PostRow {
@@ -38,6 +39,8 @@ export interface PostInput {
 	url?: string | null;
 	tags?: string[];
 	slug?: string;
+	created_at?: number;
+	draft?: number;
 }
 
 export interface PostUpdate {
@@ -47,6 +50,7 @@ export interface PostUpdate {
 	tags?: string[];
 	slug?: string;
 	created_at?: number;
+	draft?: number;
 }
 
 export interface OldPath {
@@ -225,16 +229,16 @@ export function createDb(path: string) {
 	}
 
 	function insertPost(input: PostInput): InsertResult {
-		const now = Date.now();
+		const ts = input.created_at ?? Date.now();
 		const slug = input.slug
 			? input.slug
-			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(now));
+			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(ts));
 		const result = raw
 			.prepare(
-				`INSERT INTO posts (slug, body, title, url, created_at)
-				 VALUES (?, ?, ?, ?, ?)`
+				`INSERT INTO posts (slug, body, title, url, created_at, draft)
+				 VALUES (?, ?, ?, ?, ?, ?)`
 			)
-			.run(slug, input.body, input.title ?? null, input.url ?? null, now);
+			.run(slug, input.body, input.title ?? null, input.url ?? null, ts, input.draft ?? 0);
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
 		setPostImages(id, input.body);
@@ -243,13 +247,20 @@ export function createDb(path: string) {
 
 	function getPosts({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): Post[] {
 		const rows = raw
-			.prepare('SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+			.prepare('SELECT * FROM posts WHERE draft = 0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+			.all(limit, offset) as PostRow[];
+		return rows.map(hydrate);
+	}
+
+	function getDraftPosts({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): Post[] {
+		const rows = raw
+			.prepare('SELECT * FROM posts WHERE draft = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
 			.all(limit, offset) as PostRow[];
 		return rows.map(hydrate);
 	}
 
 	function countPosts(): number {
-		const row = raw.prepare('SELECT COUNT(*) AS n FROM posts').get() as { n: number };
+		const row = raw.prepare('SELECT COUNT(*) AS n FROM posts WHERE draft = 0').get() as { n: number };
 		return row.n;
 	}
 
@@ -354,8 +365,8 @@ export function createDb(path: string) {
 
 	function updatePost(slug: string, update: PostUpdate): void {
 		const existing = raw
-			.prepare('SELECT id, slug, created_at FROM posts WHERE slug = ?')
-			.get(slug) as { id: number; slug: string; created_at: number } | undefined;
+			.prepare('SELECT id, slug, created_at, draft FROM posts WHERE slug = ?')
+			.get(slug) as { id: number; slug: string; created_at: number; draft: number } | undefined;
 		if (!existing) return;
 
 		const newSlug = update.slug ?? existing.slug;
@@ -376,13 +387,14 @@ export function createDb(path: string) {
 		}
 
 		raw.prepare(
-			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ? WHERE id = ?'
+			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ?, draft = ? WHERE id = ?'
 		).run(
 			update.body,
 			update.title ?? null,
 			update.url ?? null,
 			newSlug,
 			newCreatedAt,
+			update.draft ?? existing.draft,
 			existing.id
 		);
 
@@ -398,6 +410,7 @@ export function createDb(path: string) {
 		raw,
 		insertPost,
 		getPosts,
+		getDraftPosts,
 		countPosts,
 		getPostBySlug,
 		getPostById,
@@ -432,6 +445,7 @@ function defaultDb(): Db {
 
 export const insertPost: Db['insertPost'] = (input) => defaultDb().insertPost(input);
 export const getPosts: Db['getPosts'] = (opts) => defaultDb().getPosts(opts);
+export const getDraftPosts: Db['getDraftPosts'] = (opts) => defaultDb().getDraftPosts(opts);
 export const countPosts: Db['countPosts'] = () => defaultDb().countPosts();
 export const getPostBySlug: Db['getPostBySlug'] = (slug) => defaultDb().getPostBySlug(slug);
 export const getPostById: Db['getPostById'] = (id) => defaultDb().getPostById(id);
