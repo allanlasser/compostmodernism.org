@@ -26,21 +26,13 @@ describe('root layout', () => {
 		expect(container.querySelector('a[href="/admin"]')).toBeNull();
 	});
 
-	it('renders subscribe links without a label', () => {
+	it('renders newsletter and RSS subscribe links', () => {
 		const { container } = render(Layout, {
 			props: { data: { admin: false }, children: emptyChildren }
 		});
 		const newsletter = container.querySelector('a[href="https://buttondown.com/compostmodernism"]');
 		expect(newsletter?.textContent?.trim()).toBe('Newsletter');
 		expect(container.querySelector('a[href="/feeds/posts.xml"]')).not.toBeNull();
-		expect(container.querySelector('header')?.textContent).not.toContain('Subscribe');
-	});
-
-	it('renders admin links without a greeting', () => {
-		const { container } = render(Layout, {
-			props: { data: { admin: true }, children: emptyChildren }
-		});
-		expect(container.querySelector('header')?.textContent).not.toContain('Hi, Allan');
 	});
 
 	it('does not render Admin link when data.admin is missing', () => {

@@ -97,6 +97,9 @@ through `Object.fromEntries` first. Invalid input returns `400` with
   for the pattern.
 - Component tests use `@testing-library/svelte` with `happy-dom`.
 - Run the full suite with `npm test`. It must stay green.
+- Tests that only guide a change — e.g. asserting removed text is absent —
+  are scaffolding. Use them for the red→green step, then delete them before
+  the branch merges. Keep only tests of behavior the feature depends on.
 
 ### Schema migrations
 
