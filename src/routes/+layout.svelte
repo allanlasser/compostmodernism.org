@@ -129,14 +129,22 @@
   }
 
 	@media (max-width: 640px) {
+		/* space-between right-aligns the links beside the byline, but a lone
+		   item on a wrapped line sits at the start, so they fall back left. */
 		.site-header {
-      grid-template-columns: 1fr;
-      align-items: baseline;
-			gap: 0.5em var(--space-stack);
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+			align-items: baseline;
+			gap: 0 var(--space-stack);
 		}
-    .admin-links {
-      justify-content: flex-start;
-    }
+		.site-header > span {
+			display: contents;
+		}
+		.site-title {
+			flex-basis: 100%;
+		}
+    .admin,
     .subscribe {
       display: flex;
       align-items: baseline;
