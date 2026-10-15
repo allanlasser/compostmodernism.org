@@ -102,6 +102,10 @@ through `Object.fromEntries` first. Invalid input returns `400` with
   use them for the red→green step if they help, then delete them before the
   branch merges. Changes to a non-case aren't breaking, so they don't need
   a guard.
+- Rendered markup is covered by snapshots (`__snapshots__/*.snap`). When a
+  snapshot fails on an intended change, review the diff, then regenerate with
+  `npx vitest run -u <file>` and commit the updated `.snap` with the change.
+  Svelte's scoped class hashes are in the snapshot, so CSS edits update it too.
 
 ### Schema migrations
 
