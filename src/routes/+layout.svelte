@@ -13,27 +13,19 @@
 
 <div class="page">
 	<header class="site-header">
-		<span>
-      <a class="site-title" href="/">compostmodernism</a>
-      <p class="byline">
-        by <a href="https://allanlasser.com">Allan Lasser</a>
-      </p>
-    </span>
+		<a class="site-title" href="/">compostmodernism</a>
+		<p class="byline">
+			by <a href="https://allanlasser.com">Allan Lasser</a>
+		</p>
     {#if data?.admin}
-      <div class="admin">
-        <p>Hi, Allan!</p>
-        <div class="admin-links">
-          <a href="/admin">Admin</a>
-          <SignOut />
-        </div>
+      <div class="admin-links">
+        <a href="/admin">Admin</a>
+        <SignOut />
       </div>
     {:else}
-		  <div class="subscribe">
-        <p>Subscribe</p>
-        <div class="subscribe-links">
-          <a href="https://buttondown.com/compostmodernism">Email</a>
-          <a href="/feeds/posts.xml">RSS</a>
-        </div>
+      <div class="subscribe-links">
+        <a href="https://buttondown.com/compostmodernism">Email</a>
+        <a href="/feeds/posts.xml">RSS</a>
       </div>
     {/if}
 	</header>
@@ -54,8 +46,11 @@
 	.site-header {
 		display: grid;
 		grid-template-columns: 1fr var(--space-rail);
-    align-items: baseline;
-		gap: var(--space-gap);
+		grid-template-areas:
+			'title .'
+			'byline links';
+		align-items: baseline;
+		gap: 0 var(--space-gap);
 		width: 100%;
 		max-width: var(--content-max);
 		padding: var(--space-header) var(--space-gap) 0;
@@ -72,6 +67,7 @@
   }
 
 	.site-title {
+		grid-area: title;
 		font-family: var(--font-display);
 		font-style: italic;
 		font-size: var(--size-title);
@@ -82,6 +78,7 @@
 
   .admin-links,
   .subscribe-links {
+    grid-area: links;
     display: flex;
     flex-wrap: wrap;
     align-self: baseline;
@@ -91,14 +88,9 @@
     color: var(--color-ink-soft);
   }
 
-  .subscribe p {
-    font-size: var(--size-meta);
-  }
-
 	.byline {
-		align-self: baseline;
+		grid-area: byline;
 		font-style: italic;
-    justify-content: flex-end;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
 	}
@@ -129,26 +121,22 @@
   }
 
 	@media (max-width: 640px) {
-		/* space-between right-aligns the links beside the byline, but a lone
-		   item on a wrapped line sits at the start, so they fall back left. */
 		.site-header {
-			display: flex;
-			flex-wrap: wrap;
-			justify-content: space-between;
-			align-items: baseline;
-			gap: 0 var(--space-stack);
+			grid-template-columns: 1fr auto;
+			grid-template-areas:
+				'title title'
+				'byline links';
+			column-gap: var(--space-stack);
 		}
-		.site-header > span {
-			display: contents;
+	}
+
+	@media (max-width: 240px) {
+		.site-header {
+			grid-template-columns: 1fr;
+			grid-template-areas:
+				'title'
+				'byline'
+				'links';
 		}
-		.site-title {
-			flex-basis: 100%;
-		}
-    .admin,
-    .subscribe {
-      display: flex;
-      align-items: baseline;
-      gap: 1em;
-    }
 	}
 </style>
