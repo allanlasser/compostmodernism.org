@@ -24,7 +24,7 @@
       </div>
     {:else}
       <div class="subscribe-links">
-        <a href="https://buttondown.com/compostmodernism">Email</a>
+        <a href="https://buttondown.com/compostmodernism">Newsletter</a>
         <a href="/feeds/posts.xml">RSS</a>
       </div>
     {/if}

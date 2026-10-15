@@ -30,7 +30,8 @@ describe('root layout', () => {
 		const { container } = render(Layout, {
 			props: { data: { admin: false }, children: emptyChildren }
 		});
-		expect(container.querySelector('a[href="https://buttondown.com/compostmodernism"]')).not.toBeNull();
+		const newsletter = container.querySelector('a[href="https://buttondown.com/compostmodernism"]');
+		expect(newsletter?.textContent?.trim()).toBe('Newsletter');
 		expect(container.querySelector('a[href="/feeds/posts.xml"]')).not.toBeNull();
 		expect(container.querySelector('header')?.textContent).not.toContain('Subscribe');
 	});
