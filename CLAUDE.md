@@ -105,7 +105,8 @@ through `Object.fromEntries` first. Invalid input returns `400` with
 - Rendered markup is covered by snapshots (`__snapshots__/*.snap`). When a
   snapshot fails on an intended change, review the diff, then regenerate with
   `npx vitest run -u <file>` and commit the updated `.snap` with the change.
-  Svelte's scoped class hashes are in the snapshot, so CSS edits update it too.
+  Svelte's scoped class hashes come from the file name, so CSS-only edits
+  don't touch snapshots.
 
 ### Schema migrations
 
