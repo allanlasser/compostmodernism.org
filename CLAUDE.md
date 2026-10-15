@@ -97,6 +97,15 @@ through `Object.fromEntries` first. Invalid input returns `400` with
   for the pattern.
 - Component tests use `@testing-library/svelte` with `happy-dom`.
 - Run the full suite with `npm test`. It must stay green.
+- Test what renders, not what doesn't. Assertions that something is absent
+  (removed text, a link hidden from logged-out visitors) are scaffolding:
+  use them for the red→green step if they help, then delete them before the
+  branch merges. Changes to a non-case aren't breaking, so they don't need
+  a guard.
+- Rendered markup is covered by snapshots (`__snapshots__/*.snap`). When a
+  snapshot fails on an intended change, review the diff, then regenerate with
+  `npx vitest run -u <file>` and commit the updated `.snap` with the change.
+  Svelte's scoped class hashes are in the snapshot, so CSS edits update it too.
 
 ### Schema migrations
 

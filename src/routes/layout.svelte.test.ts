@@ -19,17 +19,26 @@ describe('root layout', () => {
 		expect(link.textContent?.trim()).toBe('Admin');
 	});
 
-	it('does not render Admin link when data.admin is false', () => {
+	it('renders newsletter and RSS subscribe links', () => {
 		const { container } = render(Layout, {
 			props: { data: { admin: false }, children: emptyChildren }
 		});
-		expect(container.querySelector('a[href="/admin"]')).toBeNull();
+		const newsletter = container.querySelector('a[href="https://buttondown.com/compostmodernism"]');
+		expect(newsletter?.textContent?.trim()).toBe('Newsletter');
+		expect(container.querySelector('a[href="/feeds/posts.xml"]')).not.toBeNull();
 	});
 
-	it('does not render Admin link when data.admin is missing', () => {
+	it('matches the header snapshot for visitors', () => {
 		const { container } = render(Layout, {
-			props: { data: {}, children: emptyChildren }
+			props: { data: { admin: false }, children: emptyChildren }
 		});
-		expect(container.querySelector('a[href="/admin"]')).toBeNull();
+		expect(container.querySelector('header')).toMatchSnapshot();
+	});
+
+	it('matches the header snapshot for admins', () => {
+		const { container } = render(Layout, {
+			props: { data: { admin: true }, children: emptyChildren }
+		});
+		expect(container.querySelector('header')).toMatchSnapshot();
 	});
 });
