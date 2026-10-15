@@ -130,7 +130,7 @@
 		}
 	}
 
-	@media (max-width: 240px) {
+	@media (max-width: 270px) {
 		.site-header {
 			grid-template-columns: 1fr;
 			grid-template-areas:
