@@ -1451,10 +1451,10 @@ preview card. Today the site emits no `<meta>` tags at all.
 
 ### Checkpoint 19
 
-- [ ] `npm test` and `npm run check` green
-- [ ] Single-post HTML (via `curl`) contains `og:title`, `og:url`,
+- [x] `npm test` and `npm run check` green
+- [x] Single-post HTML (via `curl`) contains `og:title`, `og:url`,
       `og:description`, `og:image` where applicable
-- [ ] README, SPEC updated in the same commit
+- [x] README, SPEC updated in the same commit
 
 ---
 

@@ -674,6 +674,33 @@ Renders the same feed template as the index page, scoped to one tag, with a head
 </main>
 ```
 
+### Social sharing previews
+
+Shared links unfurl into preview cards (iMessage, Slack, Bluesky, etc.) via
+Open Graph and Twitter Card tags. `src/lib/social.ts` derives the values as
+pure functions, and `SocialMeta.svelte` renders them into `<svelte:head>`
+along with `<title>` and `<link rel="canonical">`.
+
+For a single post (`postSocialMeta`):
+
+| Tag | Source |
+|---|---|
+| `og:title` | Post title. Untitled posts use the publish datetime in `America/New_York` (`November 10, 2026 at 2:32 PM`) |
+| `og:url` | The compostmodernism permalink, **link posts included**: the card shares the post, not the source |
+| `og:description` | Body rendered to plain text, truncated at a word boundary to ~200 chars with `…`; omitted for empty bodies |
+| `og:image` / `og:image:alt` | First `<img>` in the rendered body, resolved to an absolute URL; no fallback image |
+| `twitter:card` | `summary_large_image` with an image, else `summary` |
+| `og:type` | `article`, plus `article:published_time` |
+
+The datetime zone is fixed because a preview is one static string and the
+container runs in UTC; the on-page Dateline can follow the reader's zone
+after hydration, a preview can't.
+
+The home and tag pages use a site card (`siteSocialMeta`): `compostmodernism`
+/ `A blog by Allan Lasser.`, `og:type` `website`, `og:url` the page itself.
+Absolute URLs come from `$SITE_URL` (default `https://compostmodernism.org`),
+which the root layout loader exposes as `siteUrl`.
+
 ---
 
 ## 7. API Endpoints
@@ -1158,6 +1185,7 @@ R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET=compostmodernism
 R2_PUBLIC_URL=https://static.compostmodernism.org
+SITE_URL=https://compostmodernism.org
 ```
 
 Generate secrets:
