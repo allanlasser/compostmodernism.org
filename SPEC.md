@@ -701,6 +701,11 @@ The home and tag pages use a site card (`siteSocialMeta`): `compostmodernism`
 Absolute URLs come from `$SITE_URL` (default `https://compostmodernism.org`),
 which the root layout loader exposes as `siteUrl`.
 
+Other head elements: `+error.svelte` sets `<title>` (`Not found` for 404s,
+`Something went wrong` otherwise); admin pages carry `robots: noindex` and
+no `<title>`; `apple-touch-icon` reuses `favicon.png`. No `theme-color`,
+because the background hue cycles through the full wheel every hour.
+
 ---
 
 ## 7. API Endpoints

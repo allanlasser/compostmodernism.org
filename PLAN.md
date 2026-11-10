@@ -1470,10 +1470,10 @@ background hue cycles hourly, so any static value would clash.
 
 ### Checkpoint 19b
 
-- [ ] `npm test` and `npm run check` green
-- [ ] `curl` of an unknown URL shows the error title; `/admin/login`
+- [x] `npm test` and `npm run check` green
+- [x] `curl` of an unknown URL shows the error title; `/admin/login`
       shows `noindex`; any page shows `apple-touch-icon`
-- [ ] README, SPEC updated in the same commit
+- [x] README, SPEC updated in the same commit
 
 ---
 

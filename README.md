@@ -49,6 +49,7 @@ This file is the architectural overview — what the running app actually is.
 │   ├── routes/
 │   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection, siteUrl
 │   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
+│   │   ├── +error.svelte                  # Error/404 page inside site chrome
 │   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
 │   │   ├── tag/[slug]/                    # Tag feed
 │   │   ├── admin/                         # Login, posts table + new/edit pages, images table
@@ -120,6 +121,12 @@ its title (or its Eastern-time publish datetime when untitled), the first
 image in the body, and the body text truncated to ~200 chars. `og:url` is
 always the compostmodernism permalink, even for link posts. Absolute URLs use
 `$SITE_URL`. See SPEC §5 *Social sharing previews* for the full rules.
+
+Elsewhere in `<head>`: `+error.svelte` titles errors (`Not found ·
+compostmodernism`), the admin layout adds `<meta name="robots"
+content="noindex">`, and `app.html` links `favicon.png` as the
+`apple-touch-icon`. There is deliberately no `theme-color`: the background
+hue cycles hourly, so a static value would clash.
 
 ### Schema and migrations
 
