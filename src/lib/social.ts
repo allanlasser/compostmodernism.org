@@ -109,3 +109,14 @@ export function siteSocialMeta(siteUrl: string, path: string): SocialMeta {
 		url: `${origin(siteUrl)}${path}`
 	};
 }
+
+export function tagSocialMeta(siteUrl: string, tag: string): SocialMeta {
+	const title = `#${tag}`;
+	return {
+		type: 'website',
+		title,
+		documentTitle: `${title} · ${SITE_NAME}`,
+		description: `Posts tagged ${tag} on ${SITE_NAME}, a blog by Allan Lasser.`,
+		url: `${origin(siteUrl)}/tag/${tag}`
+	};
+}

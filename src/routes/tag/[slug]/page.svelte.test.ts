@@ -49,9 +49,9 @@ describe('tag page', () => {
 		expect(container.querySelectorAll('article').length).toBe(0);
 	});
 
-	it('renders site preview tags at the tag url', () => {
+	it('renders tag preview tags at the tag url', () => {
 		render(Page, { props: { data: { siteUrl: SITE, tag: 'food', feed: [] } } });
-		expect(document.head.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('compostmodernism');
+		expect(document.head.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('#food');
 		expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://compostmodernism.org/tag/food');
 	});
 });
