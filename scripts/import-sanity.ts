@@ -172,6 +172,42 @@ async function ensureImage(
 	return publicUrl;
 }
 
+const FILE_CONTENT_TYPES: Record<string, string> = {
+	pdf: 'application/pdf',
+	zip: 'application/zip',
+	csv: 'text/csv',
+	txt: 'text/plain'
+};
+
+async function ensureFile(assetUrl: string, publishedAt: string): Promise<string> {
+	const filename = new URL(assetUrl).pathname.split('/').pop() ?? '';
+	const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : 'bin';
+	const hash = createHash('md5').update(filename).digest('hex').slice(0, 8);
+	const d = new Date(publishedAt);
+	const key = `files/${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${hash}.${ext}`;
+	const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+
+	if (dryRun) {
+		console.log(`    [dry-run] file ${filename.slice(0, 12)} → ${key}`);
+		return publicUrl;
+	}
+
+	const resp = await fetch(assetUrl);
+	if (!resp.ok) throw new Error(`Sanity CDN returned ${resp.status} for ${assetUrl}`);
+
+	await r2!.send(
+		new PutObjectCommand({
+			Bucket: R2_BUCKET!,
+			Key: key,
+			Body: Buffer.from(await resp.arrayBuffer()),
+			ContentType: FILE_CONTENT_TYPES[ext] ?? 'application/octet-stream'
+		})
+	);
+
+	console.log(`    ✓ uploaded ${key}`);
+	return publicUrl;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -199,7 +235,11 @@ async function main() {
 			const imageHandler = async (block: SanityImageBlock) =>
 				ensureImage(block, post.publishedAt);
 
-			const body = await portableTextToMarkdown(post.body ?? [], imageHandler);
+			const body = await portableTextToMarkdown(
+				post.body ?? [],
+				imageHandler,
+				(url) => ensureFile(url, post.publishedAt)
+			);
 
 			let url: string | null = null;
 			let finalBody = body;

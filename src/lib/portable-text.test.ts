@@ -237,4 +237,53 @@ describe('portableTextToMarkdown', () => {
 			expect(callCount).toBe(2);
 		});
 	});
+
+	describe('file links', () => {
+		const sanityFile = 'https://cdn.sanity.io/files/abc123/production/deadbeef.pdf';
+
+		function linkBlock(href: string): SanityBlock {
+			return {
+				_type: 'block',
+				markDefs: [{ _key: 'lnk1', _type: 'link', href }],
+				children: [{ _type: 'span', text: 'a PDF', marks: ['lnk1'] }]
+			};
+		}
+
+		it('rewrites Sanity-hosted file hrefs via the file handler', async () => {
+			const seen: string[] = [];
+			const fileHandler = async (url: string) => {
+				seen.push(url);
+				return 'https://r2.example.com/files/deadbeef.pdf';
+			};
+			const md = await portableTextToMarkdown([linkBlock(sanityFile)], noopImage, fileHandler);
+			expect(md).toBe('[a PDF](https://r2.example.com/files/deadbeef.pdf)');
+			expect(seen).toEqual([sanityFile]);
+		});
+
+		it('leaves other links alone and does not call the file handler', async () => {
+			let called = false;
+			const fileHandler = async (url: string) => {
+				called = true;
+				return url;
+			};
+			const md = await portableTextToMarkdown(
+				[linkBlock('https://example.com/doc.pdf')],
+				noopImage,
+				fileHandler
+			);
+			expect(md).toBe('[a PDF](https://example.com/doc.pdf)');
+			expect(called).toBe(false);
+		});
+
+		it('keeps the original href when no file handler is given', async () => {
+			const md = await portableTextToMarkdown([linkBlock(sanityFile)], noopImage);
+			expect(md).toBe(`[a PDF](${sanityFile})`);
+		});
+
+		it('does not mutate the input blocks', async () => {
+			const block = linkBlock(sanityFile);
+			await portableTextToMarkdown([block], noopImage, async () => 'https://r2.example.com/x.pdf');
+			expect((block as { markDefs: { href: string }[] }).markDefs[0].href).toBe(sanityFile);
+		});
+	});
 });

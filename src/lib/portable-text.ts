@@ -116,15 +116,35 @@ function renderTextBlock(block: SanityTextBlock): string {
 	}
 }
 
+const SANITY_FILE_URL = /^https:\/\/cdn\.sanity\.io\/files\//;
+
+async function rehostFileLinks(
+	block: SanityTextBlock,
+	fileHandler: (url: string) => Promise<string>
+): Promise<SanityTextBlock> {
+	const markDefs = await Promise.all(
+		(block.markDefs ?? []).map(async (def) =>
+			def.href && SANITY_FILE_URL.test(def.href)
+				? { ...def, href: await fileHandler(def.href) }
+				: def
+		)
+	);
+	return { ...block, markDefs };
+}
+
 export async function portableTextToMarkdown(
 	blocks: SanityBlock[],
-	imageHandler: (block: SanityImageBlock) => Promise<string>
+	imageHandler: (block: SanityImageBlock) => Promise<string>,
+	fileHandler?: (url: string) => Promise<string>
 ): Promise<string> {
 	const parts: string[] = [];
 
 	for (const block of blocks) {
 		if (block._type === 'block') {
-			parts.push(renderTextBlock(block as SanityTextBlock));
+			const textBlock = fileHandler
+				? await rehostFileLinks(block as SanityTextBlock, fileHandler)
+				: (block as SanityTextBlock);
+			parts.push(renderTextBlock(textBlock));
 		} else if (block._type === 'image') {
 			const url = await imageHandler(block as SanityImageBlock);
 			const img = block as SanityImageBlock;
