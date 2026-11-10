@@ -124,8 +124,9 @@ always the compostmodernism permalink, even for link posts. Absolute URLs use
 
 Elsewhere in `<head>`: `+error.svelte` titles errors (`Not found ·
 compostmodernism`), the admin layout adds `<meta name="robots"
-content="noindex">`, and `app.html` links `favicon.png` as the
-`apple-touch-icon`. There is deliberately no `theme-color`: the background
+content="noindex">`, and `app.html` links `static/apple-touch-icon.png`
+(opaque, white symbol on pine green `#0f4d3c`). Tag pages are titled
+`#tag · compostmodernism`. There is deliberately no `theme-color`: the background
 hue cycles hourly, so a static value would clash.
 
 ### Schema and migrations

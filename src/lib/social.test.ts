@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { postSocialMeta, siteSocialMeta } from './social';
+import { postSocialMeta, siteSocialMeta, tagSocialMeta } from './social';
 import type { Post } from './types';
 
 const SITE = 'https://compostmodernism.org';
@@ -84,6 +84,18 @@ describe('siteSocialMeta', () => {
 			documentTitle: 'compostmodernism',
 			description: 'A blog by Allan Lasser.',
 			url: 'https://compostmodernism.org/tag/birds'
+		});
+	});
+});
+
+describe('tagSocialMeta', () => {
+	it('titles the page after the tag', () => {
+		expect(tagSocialMeta(`${SITE}/`, 'food')).toEqual({
+			type: 'website',
+			title: '#food',
+			documentTitle: '#food · compostmodernism',
+			description: 'Posts tagged food on compostmodernism, a blog by Allan Lasser.',
+			url: 'https://compostmodernism.org/tag/food'
 		});
 	});
 });

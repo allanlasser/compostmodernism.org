@@ -1,7 +1,7 @@
 <script lang="ts">
 	import FeedItem from '$lib/components/FeedItem.svelte';
 	import SocialMeta from '$lib/components/SocialMeta.svelte';
-	import { siteSocialMeta } from '$lib/social';
+	import { tagSocialMeta } from '$lib/social';
   import type { Post } from '$lib/types';
 
 	interface Props {
@@ -15,7 +15,7 @@
 	let { data }: Props = $props();
 </script>
 
-<SocialMeta meta={siteSocialMeta(data.siteUrl, `/tag/${data.tag}`)} />
+<SocialMeta meta={tagSocialMeta(data.siteUrl, data.tag)} />
 
 <div class="feed">
 	<h1 class="tag-heading">{data.tag}</h1>
