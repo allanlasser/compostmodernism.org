@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('$env/dynamic/private', () => ({
-	env: { POST_SECRET: 'test-secret' }
+	env: { POST_SECRET: 'test-secret', SITE_URL: 'https://site.test' }
 }));
 
 import { load } from './+layout.server';
@@ -16,16 +16,16 @@ function makeEvent(session?: string) {
 describe('root layout loader', () => {
 	it('admin=false when no session cookie', async () => {
 		const result = await load(makeEvent() as never);
-		expect(result).toEqual({ admin: false });
+		expect(result).toEqual({ admin: false, siteUrl: 'https://site.test' });
 	});
 
 	it('admin=false when session cookie does not match POST_SECRET', async () => {
 		const result = await load(makeEvent('wrong') as never);
-		expect(result).toEqual({ admin: false });
+		expect(result).toEqual({ admin: false, siteUrl: 'https://site.test' });
 	});
 
 	it('admin=true when session cookie matches POST_SECRET', async () => {
 		const result = await load(makeEvent('test-secret') as never);
-		expect(result).toEqual({ admin: true });
+		expect(result).toEqual({ admin: true, siteUrl: 'https://site.test' });
 	});
 });
