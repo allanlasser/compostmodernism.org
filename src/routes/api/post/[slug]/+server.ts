@@ -13,7 +13,7 @@ export const PATCH: RequestHandler = async (event) => {
 	const slug = params.slug;
 	if (!slug) return json({ error: 'Slug not provided' }, { status: 400 });
 
-	const post = getPostBySlug(slug);
+	const post = getPostBySlug(slug, { includeDrafts: true });
 	if (!post) return json({ error: 'Not found' }, { status: 404 });
 
 	const parsed = postUpdateSchema.safeParse(await request.json());
@@ -54,7 +54,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const slug = event.params.slug;
 	if (!slug) return json({ error: 'Slug not provided' }, { status: 400 });
 
-	const post = getPostBySlug(slug);
+	const post = getPostBySlug(slug, { includeDrafts: true });
 	if (!post) return json({ error: 'Not found' }, { status: 404 });
 
 	deletePost(slug);

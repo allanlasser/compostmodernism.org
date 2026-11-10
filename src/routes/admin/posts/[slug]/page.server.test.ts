@@ -39,6 +39,12 @@ describe('admin edit-post loader', () => {
 		expect(result.post.permalink).toBe('/2026/01/15/hello');
 	});
 
+	it('looks the post up with drafts included', async () => {
+		mockGet.mockReturnValue(makePost({ draft: 1 }));
+		await load({ params: { slug: 'hello' } } as never);
+		expect(mockGet).toHaveBeenCalledWith('hello', { includeDrafts: true });
+	});
+
 	it('throws 404 when slug is missing', async () => {
 		mockGet.mockReturnValue(null);
 		await expect(load({ params: { slug: 'nope' } } as never)).rejects.toMatchObject({

@@ -1406,6 +1406,63 @@ test: PutObjectCommand called with bucket, r2Key, zip buffer, ContentType applic
 
 ---
 
+## Phase 19 — Sanity Import & Draft Posts
+
+One-time import of the backlog from the Sanity-hosted blog. Imported posts
+land as drafts (`posts.draft = 1`), are inspected, then flipped to published
+with `scripts/publish-drafts.ts`.
+
+### Design decisions (locked before coding)
+
+- **Drafts are invisible to every public read path.** Safe default: each
+  single-post lookup excludes drafts unless the caller opts in with
+  `{ includeDrafts: true }`. Opt-in callers are the admin edit page and the
+  authed `PATCH`/`DELETE` API; public routes never pass it.
+- **Redirect lookups** (`getPostByOldPath`, `getPostByOldToken`) always
+  exclude drafts. A draft has never been public, so there is nothing to
+  redirect from.
+- **Aggregates count published posts only:** tag listing and counts, and the
+  admin cadence graph. Backdated drafts would otherwise distort the graph.
+- **Slugs follow the app's normal rule** (slugified title, else
+  `hashSlug(created_at)`); Sanity's own slugs are ignored. URLs are
+  `/YYYY/MM/DD/<slug>` using the original `publishedAt`.
+- **Assets are rehosted in R2.** Images are re-encoded to WebP under
+  `images/…` (recorded in the images ledger). File attachments linked from
+  post bodies (`cdn.sanity.io/files/…`) are copied byte-for-byte to
+  `files/YYYY/MM/DD/<hash>.<ext>` and are *not* in the images ledger.
+
+### Done (commits on `sanity-import`)
+
+- [x] Migration `004_draft.sql`; `draft` on insert/update, API schemas and routes
+- [x] `portable-text.ts` converter (+ file-link rehosting hook)
+- [x] `scripts/import-sanity.ts`, `validate-import.ts`, `publish-drafts.ts`
+- [x] `Post` test fixtures carry `draft: 0`; `npm run check` clean
+
+### Red → Green cycles (draft visibility)
+
+```
+19.1  db: getPostBySlug excludes drafts by default; includeDrafts returns them
+19.2  db: getPostById excludes drafts by default; includeDrafts returns them
+19.3  db: getPostByOldPath / getPostByOldToken exclude drafts
+19.4  db: getPostsByTag excludes drafts
+19.5  db: getAllTags counts published posts only; draft-only tags omitted
+19.6  db: getPostCadence counts published posts only
+19.7  route: /YYYY/MM/DD/<slug> for a draft → 404
+19.8  route: /p/<token> for a draft → 404
+19.9  route: admin edit page and PATCH/DELETE API still load drafts
+```
+
+### Checkpoint 19
+
+- [ ] `npm test` and `npm run check` green
+- [ ] No public route returns a draft (cycles 19.1–19.8)
+- [ ] Import run against a copy of `posts.db`; `validate:import` passes
+- [ ] Imported posts inspected in the browser (images, lightbox, feed)
+- [ ] Real `posts.db` backed up, then imported into
+- [ ] README, SPEC, NOTES updated
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

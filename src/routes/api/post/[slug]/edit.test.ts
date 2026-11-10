@@ -59,6 +59,26 @@ describe('PATCH /api/post/[slug]', () => {
 		expect(res.status).toBe(401);
 	});
 
+	it('PATCH looks the post up with drafts included', async () => {
+		mockGet.mockReturnValue({ ...existing, draft: 1 });
+		await PATCH({
+			request: req({ draft: 0 }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(mockGet).toHaveBeenCalledWith('hello', { includeDrafts: true });
+	});
+
+	it('DELETE looks the post up with drafts included', async () => {
+		mockGet.mockReturnValue({ ...existing, draft: 1 });
+		await DELETE({
+			request: delReq(),
+			cookies: cookies('test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(mockGet).toHaveBeenCalledWith('hello', { includeDrafts: true });
+		expect(mockDelete).toHaveBeenCalledWith('hello');
+	});
+
 	it('404 when slug does not exist', async () => {
 		mockGet.mockReturnValue(null);
 		const res = await PATCH({

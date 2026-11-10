@@ -46,6 +46,12 @@ describe('single-post loader', () => {
 		expect((result as { post: { permalink: string } }).post.permalink).toBe('/2026/01/15/hello');
 	});
 
+	it('looks the post up without opting in to drafts', async () => {
+		mockGet.mockReturnValue(makePost());
+		await load({ params: { year: '2026', month: '01', day: '15', slug: 'hello' } } as never);
+		expect(mockGet).toHaveBeenCalledWith('hello');
+	});
+
 	it('unknown slug → throws 404', async () => {
 		mockGet.mockReturnValue(null);
 		await expect(

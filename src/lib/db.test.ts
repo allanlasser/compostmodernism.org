@@ -893,3 +893,60 @@ describe('getPostCadence', () => {
 		expect(dates).toEqual([...dates].sort());
 	});
 });
+
+describe('draft visibility', () => {
+	it('getPostBySlug excludes drafts unless includeDrafts is set', () => {
+		const { slug } = db.insertPost({ body: 'hidden', draft: 1 });
+		expect(db.getPostBySlug(slug)).toBeNull();
+		expect(db.getPostBySlug(slug, { includeDrafts: true })?.body).toBe('hidden');
+	});
+
+	it('getPostBySlug returns published posts either way', () => {
+		const { slug } = db.insertPost({ body: 'shown' });
+		expect(db.getPostBySlug(slug)?.body).toBe('shown');
+		expect(db.getPostBySlug(slug, { includeDrafts: true })?.body).toBe('shown');
+	});
+
+	it('getPostById excludes drafts unless includeDrafts is set', () => {
+		const { id } = db.insertPost({ body: 'hidden', draft: 1 });
+		expect(db.getPostById(id)).toBeNull();
+		expect(db.getPostById(id, { includeDrafts: true })?.body).toBe('hidden');
+	});
+
+	it('getPostByOldPath ignores drafts', () => {
+		const created_at = Date.UTC(2020, 0, 2, 12);
+		const { slug } = db.insertPost({ body: 'hidden', slug: 'old', created_at, draft: 1 });
+		db.updatePost(slug, { body: 'hidden', slug: 'new' });
+		const old = { year: 2020, month: 1, day: 2, slug: 'old' };
+		expect(db.getPostByOldPath(old)).toBeNull();
+		db.updatePost('new', { body: 'hidden', draft: 0 });
+		expect(db.getPostByOldPath(old)?.slug).toBe('new');
+	});
+
+	it('getPostByOldToken ignores drafts', () => {
+		const { id } = db.insertPost({ body: 'hidden', draft: 1 });
+		db.recordShortlinkRedirect('oldtok', id);
+		expect(db.getPostByOldToken('oldtok')).toBeNull();
+	});
+
+	it('getPostsByTag excludes drafts', () => {
+		db.insertPost({ body: 'shown', tags: ['x'] });
+		db.insertPost({ body: 'hidden', tags: ['x'], draft: 1 });
+		const posts = db.getPostsByTag('x');
+		expect(posts).toHaveLength(1);
+		expect(posts![0].body).toBe('shown');
+	});
+
+	it('getAllTags counts published posts only and omits draft-only tags', () => {
+		db.insertPost({ body: 'shown', tags: ['both'] });
+		db.insertPost({ body: 'hidden', tags: ['both', 'secret'], draft: 1 });
+		expect(db.getAllTags()).toEqual([{ name: 'both', slug: 'both', count: 1 }]);
+	});
+
+	it('getPostCadence counts published posts only', () => {
+		const ts = Date.UTC(2024, 0, 5, 12);
+		db.insertPost({ body: 'shown', created_at: ts });
+		db.insertPost({ body: 'hidden', created_at: ts, draft: 1 });
+		expect(db.getPostCadence()).toEqual([{ date: '2024-01-05', count: 1 }]);
+	});
+});
