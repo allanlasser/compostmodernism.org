@@ -3,6 +3,8 @@ import { render, cleanup } from '@testing-library/svelte';
 
 import Page from './+page.svelte';
 
+const SITE = 'https://compostmodernism.org';
+
 interface FeedItem {
 	slug: string;
 	body: string;
@@ -37,6 +39,7 @@ describe('feed page', () => {
 		const { container } = render(Page, {
 			props: {
 				data: {
+					siteUrl: SITE,
 					feed: [item({ title: 'DF', url: 'https://daringfireball.net', body: 'cool' })]
 				}
 			}
@@ -50,7 +53,7 @@ describe('feed page', () => {
 
 	it('titled post — h2 with no external link', () => {
 		const { container } = render(Page, {
-			props: { data: { feed: [item({ title: 'Hello', body: 'body' })] } }
+			props: { data: { siteUrl: SITE, feed: [item({ title: 'Hello', body: 'body' })] } }
 		});
 		const h2 = container.querySelector('.post--titled h2');
 		expect(h2?.textContent).toBe('Hello');
@@ -59,7 +62,7 @@ describe('feed page', () => {
 
 	it('plain post — body only, no heading', () => {
 		const { container } = render(Page, {
-			props: { data: { feed: [item({ body: 'just text' })] } }
+			props: { data: { siteUrl: SITE, feed: [item({ body: 'just text' })] } }
 		});
 		const article = container.querySelector('.post--plain');
 		expect(article).not.toBeNull();
@@ -71,6 +74,7 @@ describe('feed page', () => {
 		const { container } = render(Page, {
 			props: {
 				data: {
+					siteUrl: SITE,
 					feed: [
 						item({
 							tags: [
@@ -89,10 +93,16 @@ describe('feed page', () => {
 
 	it('permalink renders as <time> wrapped in link', () => {
 		const { container } = render(Page, {
-			props: { data: { feed: [item({ permalink: '/2026/01/15/x' })] } }
+			props: { data: { siteUrl: SITE, feed: [item({ permalink: '/2026/01/15/x' })] } }
 		});
 		const link = container.querySelector('a.permalink') as HTMLAnchorElement;
 		expect(link.getAttribute('href')).toBe('/2026/01/15/x');
 		expect(link.querySelector('time')).not.toBeNull();
+	});
+
+	it('renders site preview tags', () => {
+		render(Page, { props: { data: { siteUrl: SITE, feed: [] } } });
+		expect(document.head.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('compostmodernism');
+		expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://compostmodernism.org/');
 	});
 });

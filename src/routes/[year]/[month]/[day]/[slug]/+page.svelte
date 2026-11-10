@@ -2,10 +2,12 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
   import FeedItem from '$lib/components/FeedItem.svelte';
+  import SocialMeta from '$lib/components/SocialMeta.svelte';
+  import { postSocialMeta } from '$lib/social';
   import type { Post } from '$lib/types';
 
 	interface Props {
-		data: { post: Post };
+		data: { post: Post; siteUrl: string };
 	}
 
 	let { data }: Props = $props();
@@ -13,6 +15,8 @@
 	let post = $state<Post>(untrack(() => ({ ...data.post, tags: [...data.post.tags] })));
 	const admin = $derived(Boolean(page.data.admin));
 </script>
+
+<SocialMeta meta={postSocialMeta(data.post, data.siteUrl)} />
 
 {#snippet rail()}
 {#if admin}

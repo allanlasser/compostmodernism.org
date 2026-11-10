@@ -1406,6 +1406,77 @@ test: PutObjectCommand called with bucket, r2Key, zip buffer, ContentType applic
 
 ---
 
+## Phase 19 — Social Sharing Previews
+
+**Goal:** Pasting a post link into iMessage, Slack, Bluesky, etc. unfurls a
+preview card. Today the site emits no `<meta>` tags at all.
+
+### Design decisions (locked before coding)
+
+- **Open Graph + Twitter Card** tags, rendered via `<svelte:head>` by a
+  `SocialMeta.svelte` component. The tag values come from pure functions in
+  `src/lib/social.ts`, so the rules are unit-tested without rendering.
+- **Post previews:**
+  - `og:title`: the post title. Untitled posts use the publish datetime in
+    `America/New_York`, e.g. `November 10, 2026 at 2:32 PM`. The zone is fixed
+    because a preview is a single static string and the container runs in UTC.
+  - `og:url`: always the compostmodernism permalink, link posts included.
+  - `og:description`: body rendered to plain text, truncated at a word
+    boundary to ~200 chars with `…`. Omitted when the body is empty.
+  - `og:image`: the first `<img>` in the rendered body, resolved to an
+    absolute URL; `og:image:alt` from its alt text. No fallback image.
+  - `twitter:card` is `summary_large_image` with an image, else `summary`.
+  - `og:type` is `article`, with `article:published_time`.
+- **Site previews** (home, tag pages): `compostmodernism` / `A blog by
+  Allan Lasser.`, `og:type` `website`, `og:url` the page's own URL.
+- **`<title>`** is set alongside: `{og:title} · compostmodernism` on posts,
+  `compostmodernism` elsewhere.
+- **Absolute URLs** use `$SITE_URL` (default `https://compostmodernism.org`),
+  the same origin the RSS feed uses, exposed as `siteUrl` from the root
+  layout loader.
+
+### Red → Green cycles
+
+1. `social.test.ts`: titled post → `title` is the post title
+2. untitled post → `title` is the Eastern datetime
+3. link post → `url` is the permalink, not the external URL
+4. body text → `description` is plain text with markdown stripped
+5. long body → `description` is truncated at a word boundary with `…`
+6. body with images → `image` is the first image's absolute URL, plus alt
+7. relative image src → resolved against `siteUrl`
+8. `siteSocialMeta` → site title/description, `website` type, page URL
+9. `SocialMeta.svelte.test.ts`: renders `og:*`/`twitter:*` tags into `<head>`
+10. `layout.server.test.ts`: loader returns `siteUrl` from `$SITE_URL`
+11. Post, home, and tag pages render their social meta
+
+### Checkpoint 19
+
+- [x] `npm test` and `npm run check` green
+- [x] Single-post HTML (via `curl`) contains `og:title`, `og:url`,
+      `og:description`, `og:image` where applicable
+- [x] README, SPEC updated in the same commit
+
+### 19b — Remaining head elements
+
+Admin pages stay untitled by choice. `theme-color` is skipped: the
+background hue cycles hourly, so any static value would clash.
+
+1. `+error.svelte` → `<title>` is `Not found · compostmodernism` for 404s,
+   `Something went wrong · compostmodernism` otherwise; body shows the
+   error message and a link home
+2. `admin/+layout.svelte` → `<meta name="robots" content="noindex">`
+3. `app.html` → `<link rel="apple-touch-icon">` to `favicon.png` (static
+   markup, verified via `curl` rather than a unit test)
+
+### Checkpoint 19b
+
+- [x] `npm test` and `npm run check` green
+- [x] `curl` of an unknown URL shows the error title; `/admin/login`
+      shows `noindex`; any page shows `apple-touch-icon`
+- [x] README, SPEC updated in the same commit
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
