@@ -4,8 +4,7 @@ import { env } from '$env/dynamic/private';
 import { getPosts, type Post } from '$lib/db';
 import { permalink } from '$lib/slug';
 import { renderMarkdown } from '$lib/markdown';
-
-const DEFAULT_SITE_URL = 'https://compostmodernism.org';
+import { DEFAULT_SITE_URL } from '$lib/social';
 
 export function _buildFeed(posts: Post[], siteUrl: string): string {
 	const site = siteUrl.replace(/\/$/, '');

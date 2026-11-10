@@ -38,6 +38,22 @@ rewrites those hrefs; `validate-import.ts` flags any `sanity.io` left behind.
 
 ---
 
+## iOS fills a transparent apple-touch-icon with black
+
+`apple-touch-icon` originally pointed at `favicon.png`, a dark-brown symbol
+on a transparent background. iOS doesn't composite touch icons onto
+anything light: transparent pixels become black, so the home-screen icon
+was a near-invisible brown-on-black blob.
+
+The fix is a dedicated `static/apple-touch-icon.png` with **no alpha
+channel** (sharp's `.removeAlpha()`; `file` should report `RGB`, not
+`RGBA`). Keep it square-cornered with the symbol inset (~72%): iOS applies
+its own rounded mask and would clip artwork that runs to the edges. To
+regenerate after a favicon change, tint the favicon's pixels white, resize
+to 130px, and composite it centered on a 180×180 `#0f4d3c` canvas.
+
+---
+
 ## The nightly archive is a zip, not a git-committed tree
 
 Phase 7 was specified as "write `archive/YYYY/MM/DD/slug.md` per post, then

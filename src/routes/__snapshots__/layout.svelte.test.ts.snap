@@ -1,0 +1,90 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`root layout > matches the header snapshot for admins 1`] = `
+<header
+  class="site-header svelte-12qhfyh"
+>
+  <a
+    class="site-title svelte-12qhfyh"
+    href="/"
+  >
+    compostmodernism
+  </a>
+   
+  <p
+    class="byline svelte-12qhfyh"
+  >
+    by 
+    <a
+      class="svelte-12qhfyh"
+      href="https://allanlasser.com"
+    >
+      Allan Lasser
+    </a>
+  </p>
+   
+  <div
+    class="admin-links svelte-12qhfyh"
+  >
+    <a
+      class="svelte-12qhfyh"
+      href="/admin"
+    >
+      Admin
+    </a>
+     
+    <button
+      class="svelte-uvisij"
+      type="button"
+    >
+      Sign out
+    </button>
+    <!---->
+  </div>
+  <!---->
+</header>
+`;
+
+exports[`root layout > matches the header snapshot for visitors 1`] = `
+<header
+  class="site-header svelte-12qhfyh"
+>
+  <a
+    class="site-title svelte-12qhfyh"
+    href="/"
+  >
+    compostmodernism
+  </a>
+   
+  <p
+    class="byline svelte-12qhfyh"
+  >
+    by 
+    <a
+      class="svelte-12qhfyh"
+      href="https://allanlasser.com"
+    >
+      Allan Lasser
+    </a>
+  </p>
+   
+  <div
+    class="subscribe-links svelte-12qhfyh"
+  >
+    <a
+      class="svelte-12qhfyh"
+      href="https://buttondown.com/compostmodernism"
+    >
+      Newsletter
+    </a>
+     
+    <a
+      class="svelte-12qhfyh"
+      href="/feeds/posts.xml"
+    >
+      RSS
+    </a>
+  </div>
+  <!---->
+</header>
+`;

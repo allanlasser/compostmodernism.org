@@ -27,4 +27,11 @@ describe('admin layout', () => {
 		});
 		expect(container.querySelector('.admin-nav')).toBeNull();
 	});
+
+	it('asks search engines not to index admin pages', () => {
+		render(Layout, { props: { data: { authed: false }, children: childSnippet('hi') } });
+		expect(
+			document.head.querySelector('meta[name="robots"]')?.getAttribute('content')
+		).toBe('noindex');
+	});
 });

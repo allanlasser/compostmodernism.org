@@ -49,6 +49,16 @@
 	--leading-body: 26px;
 	--leading-lede: 31px;
 
+	@media (max-width: 640px) {
+		--size-body: 18px;
+		--size-lede: 22.5px;
+		--size-meta: 15.75px;
+		--size-title: 27px;
+
+		--leading-body: 29px;
+		--leading-lede: 35px;
+	}
+
 	--space-rail: 160px;
 	--space-gap: 48px;
 	--space-stack: 13px;

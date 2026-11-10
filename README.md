@@ -42,13 +42,15 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── shortid-freeze.ts # Freezes current tokens into shortlink_redirects (migration tool)
 │   │   ├── markdown.ts      # marked wrapper used by feed + post pages
 │   │   ├── portable-text.ts # Sanity Portable Text → markdown (used only by the import script)
+│   │   ├── social.ts        # Open Graph / Twitter Card values for posts and site pages
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
 │   │   ├── schemas.ts       # Shared zod schemas (postInputSchema, postUpdateSchema, imageMetadataSchema)
-│   │   └── components/      # FeedItem, Dateline, TagList + admin/ (PostForm, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
+│   │   └── components/      # FeedItem, Dateline, TagList, SocialMeta + admin/ (PostForm, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
 │   ├── routes/
-│   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection
+│   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection, siteUrl
 │   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
+│   │   ├── +error.svelte                  # Error/404 page inside site chrome
 │   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
 │   │   ├── tag/[slug]/                    # Tag feed
 │   │   ├── admin/                         # Login, posts table + new/edit pages, images table
@@ -118,6 +120,22 @@ on which fields are present:
 - **Link post** — `url` + `title` → title links externally, marker `→` rendered.
 - **Titled post** — `title` only → `<h2>` heading.
 - **Plain post** — body only, no heading.
+
+### Social sharing previews
+
+Post, home, and tag pages render Open Graph and Twitter Card tags through
+`SocialMeta.svelte`, with values from `src/lib/social.ts`. A post's card uses
+its title (or its Eastern-time publish datetime when untitled), the first
+image in the body, and the body text truncated to ~200 chars. `og:url` is
+always the compostmodernism permalink, even for link posts. Absolute URLs use
+`$SITE_URL`. See SPEC §5 *Social sharing previews* for the full rules.
+
+Elsewhere in `<head>`: `+error.svelte` titles errors (`Not found ·
+compostmodernism`), the admin layout adds `<meta name="robots"
+content="noindex">`, and `app.html` links `static/apple-touch-icon.png`
+(opaque, white symbol on pine green `#0f4d3c`). Tag pages are titled
+`#tag · compostmodernism`. There is deliberately no `theme-color`: the background
+hue cycles hourly, so a static value would clash.
 
 ### Schema and migrations
 
