@@ -1456,6 +1456,25 @@ preview card. Today the site emits no `<meta>` tags at all.
       `og:description`, `og:image` where applicable
 - [x] README, SPEC updated in the same commit
 
+### 19b — Remaining head elements
+
+Admin pages stay untitled by choice. `theme-color` is skipped: the
+background hue cycles hourly, so any static value would clash.
+
+1. `+error.svelte` → `<title>` is `Not found · compostmodernism` for 404s,
+   `Something went wrong · compostmodernism` otherwise; body shows the
+   error message and a link home
+2. `admin/+layout.svelte` → `<meta name="robots" content="noindex">`
+3. `app.html` → `<link rel="apple-touch-icon">` to `favicon.png` (static
+   markup, verified via `curl` rather than a unit test)
+
+### Checkpoint 19b
+
+- [ ] `npm test` and `npm run check` green
+- [ ] `curl` of an unknown URL shows the error title; `/admin/login`
+      shows `noindex`; any page shows `apple-touch-icon`
+- [ ] README, SPEC updated in the same commit
+
 ---
 
 ## Deferred Follow-ups
