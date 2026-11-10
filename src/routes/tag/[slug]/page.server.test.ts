@@ -17,6 +17,7 @@ function makePost(over: Partial<Post> = {}): Post {
 		title: null,
 		url: null,
 		created_at: ts,
+		draft: 0,
 		type: 'post',
 		date: ts,
 		tags: [],

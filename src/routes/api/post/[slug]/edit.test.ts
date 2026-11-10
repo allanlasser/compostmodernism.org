@@ -39,6 +39,7 @@ const existing = {
 	title: 'Old Title',
 	url: null,
 	created_at: 1700000000000,
+	draft: 0,
 	type: 'post' as const,
 	date: 1700000000000,
 	tags: []
