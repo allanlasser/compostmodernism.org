@@ -1459,7 +1459,7 @@ with `scripts/publish-drafts.ts`.
       the dev server: a draft 404s at its permalink and is absent from `/` and the feed)
 - [x] Import run against a copy of `posts.db`; `validate:import` passes
 - [x] Imported posts inspected in the browser (images, lightbox, feed)
-- [ ] Real `posts.db` backed up, then imported into
+- [x] Real `posts.db` backed up, then imported into (34 posts, published)
 - [x] README, SPEC, NOTES updated
 
 ---
