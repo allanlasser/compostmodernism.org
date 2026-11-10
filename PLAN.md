@@ -1475,6 +1475,27 @@ background hue cycles hourly, so any static value would clash.
       shows `noindex`; any page shows `apple-touch-icon`
 - [x] README, SPEC updated in the same commit
 
+### 19c — Tag titles and a solid touch icon
+
+- Tag pages get their own card: `og:title` `#food`, `<title>`
+  `#food · compostmodernism`, description `Posts tagged food on
+  compostmodernism, a blog by Allan Lasser.`
+- `apple-touch-icon` gets its own `static/apple-touch-icon.png`: 180×180,
+  opaque, the favicon symbol in white at 72% scale on pine green `#0f4d3c`.
+  iOS fills transparent pixels with black, which is why `favicon.png`
+  looked wrong. No rounded corners: iOS applies its own mask.
+
+1. `social.test.ts`: `tagSocialMeta` → tag title, document title,
+   description, tag URL, `website` type
+2. Tag page renders `og:title` `#food`
+
+### Checkpoint 19c
+
+- [ ] `npm test` and `npm run check` green
+- [ ] `curl` of a tag page shows `#tag · compostmodernism`; any page links
+      `apple-touch-icon.png`, which is 180×180 with no alpha channel
+- [ ] README, SPEC updated in the same commit
+
 ---
 
 ## Deferred Follow-ups
