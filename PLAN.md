@@ -1454,12 +1454,13 @@ with `scripts/publish-drafts.ts`.
 
 ### Checkpoint 19
 
-- [ ] `npm test` and `npm run check` green
-- [ ] No public route returns a draft (cycles 19.1–19.8)
-- [ ] Import run against a copy of `posts.db`; `validate:import` passes
-- [ ] Imported posts inspected in the browser (images, lightbox, feed)
+- [x] `npm test` and `npm run check` green
+- [x] No public route returns a draft (cycles 19.1–19.8; also confirmed against
+      the dev server: a draft 404s at its permalink and is absent from `/` and the feed)
+- [x] Import run against a copy of `posts.db`; `validate:import` passes
+- [x] Imported posts inspected in the browser (images, lightbox, feed)
 - [ ] Real `posts.db` backed up, then imported into
-- [ ] README, SPEC, NOTES updated
+- [x] README, SPEC, NOTES updated
 
 ---
 

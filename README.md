@@ -41,6 +41,7 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── shortid.ts       # Sqids encode/decode for short post tokens
 │   │   ├── shortid-freeze.ts # Freezes current tokens into shortlink_redirects (migration tool)
 │   │   ├── markdown.ts      # marked wrapper used by feed + post pages
+│   │   ├── portable-text.ts # Sanity Portable Text → markdown (used only by the import script)
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
 │   │   ├── schemas.ts       # Shared zod schemas (postInputSchema, postUpdateSchema, imageMetadataSchema)
@@ -63,12 +64,16 @@ This file is the architectural overview — what the running app actually is.
 │   ├── init-db.ts                # One-shot: open posts.db so migrations run
 │   ├── export-and-backup.ts      # Nightly archive/YYYY-MM-DD.zip (posts.db + markdown), mirrored to R2
 │   ├── freeze-shortlink-tokens.ts # One-shot: persist current short tokens before changing Sqids config
+│   ├── import-sanity.ts          # One-off: Sanity posts → draft rows, assets rehosted in R2
+│   ├── validate-import.ts        # Checks imported drafts (bodies, R2 images, backdating)
+│   ├── publish-drafts.ts         # Flips draft=1 → 0 (optionally only before a date)
 │   ├── seed.ts                   # Local-only fixture data
 │   └── fixtures.ts
 ├── migrations/
 │   ├── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
 │   ├── 002_slug_redirects.sql    # Path → post_id ledger for slug/date renames
-│   └── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
+│   ├── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
+│   └── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
 ├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
@@ -88,7 +93,10 @@ This file is the architectural overview — what the running app actually is.
    `slugify`, or an 8-char hash via `hashSlug` for untitled posts), handles slug
    collisions by appending `-2`, `-3`, …, writes tag join rows, and calls
    `setPostImages` to record any R2 URLs found inside the markdown body.
-2. **Read** — the feed loader calls `getPosts` (default limit 50, reverse-chronological,
+2. **Read** — drafts (`posts.draft = 1`) are invisible here: `getPosts`, `countPosts`,
+   tag listings and counts, the cadence graph, redirect lookups, and the single-post
+   lookups (`getPostBySlug`, `getPostById`) all exclude them. The admin edit page and
+   the authed `PATCH`/`DELETE` API opt in with `{ includeDrafts: true }`. The feed loader calls `getPosts` (default limit 50, reverse-chronological,
    hydrated with `tags` and a `date` alias). Each post is rendered by `FeedItem.svelte`,
    which switches on link/titled/plain.
 3. **Edit** — `/admin/posts/[slug]` issues `PATCH /api/post/[slug]`. Omitted fields
@@ -153,8 +161,9 @@ table, no sessions table, no auth library — the cookie value is the secret its
 
 - **`posts.db`** — single SQLite file, baked into the container's working directory.
   Volume-mounted in `docker-compose.yml` so it survives redeploys.
-- **Cloudflare R2** — two prefixes in one bucket: `images/` (public, served at
-  `R2_PUBLIC_URL`) and `backups/` (private, 90-day lifecycle rule — receives
+- **Cloudflare R2** — three prefixes in one bucket: `images/` and `files/` (public,
+  served at `R2_PUBLIC_URL`; `files/` holds non-image attachments rehosted by the
+  Sanity import and is not tracked in the image ledger) and `backups/` (private, 90-day lifecycle rule — receives
   the nightly `YYYY-MM-DD.zip`).
 - **`archive/`** — gitignored bind-mount directory on the VPS holding one
   `YYYY-MM-DD.zip` per nightly run. Each zip contains a copy of `posts.db`
@@ -173,6 +182,23 @@ npm run seed               # populate posts.db with fixtures (idempotent)
 ```
 
 A `posts.db` file appears in the repo root on first run; it's gitignored.
+
+### Sanity import
+
+One-off migration of the old blog. Needs `SANITY_PROJECT`, `SANITY_DATASET`,
+`SANITY_TOKEN` (a read-only Viewer token) and the `R2_*` values in `.env`.
+
+```sh
+npm run import:dry         # preview slugs/images/files; writes nothing
+npm run import:sanity      # insert as drafts (draft=1), backdated; uploads assets to R2
+npm run validate:import    # check bodies, R2 image URLs, backdating
+npm run publish:drafts     # flip drafts to published (--before YYYY-MM-DD, --dry-run)
+```
+
+Scripts open `posts.db` in the working directory. To rehearse, run them in a git
+worktree with its own copy of `posts.db` (see CLAUDE.md §Fresh worktree setup);
+asset uploads still go to the real bucket. Re-running is safe: posts whose slug
+already exists are skipped.
 
 ## Deployment
 
@@ -224,7 +250,7 @@ Creates a new post.
 | 400 | `{ error }` | Invalid body, or `url` provided without `title` |
 | 201 | `{ ok: true, slug: string, permalink: string }` | Post created |
 
-**Request body:** `{ body: string, title?: string, url?: string, tags?: string[] }`
+**Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1 }`
 
 ### `PATCH /api/post/[slug]`
 
@@ -241,7 +267,7 @@ the new canonical permalink.
 | 409 | `{ error }` | Requested `slug` is already in use by another post |
 | 200 | `{ ok: true, slug: string }` | Post updated; `slug` is the current (post-rename) slug |
 
-**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number }`
+**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number, draft?: 0 | 1 }`
 
 ### `DELETE /api/post/[slug]`
 

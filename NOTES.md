@@ -5,6 +5,39 @@ entries go on top.
 
 ---
 
+## `npm test` does not type-check; fixtures drift when a type gains a required field
+
+Adding required `draft: number` to `PostRow` left every hand-built `Post` fixture
+in the route tests invalid, yet all 383 tests stayed green — vitest strips types.
+Only `npm run check` caught it (8 fixtures). Run both after touching a shared
+type, and pipe `check` through `grep -E "ERROR|COMPLETED"` — its output is long
+and an early `head`/`tail` hides some of the errors.
+
+---
+
+## Draft visibility is opt-in, and scripts hard-code `posts.db` in the cwd
+
+Public lookups (`getPostBySlug`, `getPostById`, redirects, tags, cadence) exclude
+`draft = 1` rows by default; callers that must see drafts pass
+`{ includeDrafts: true }`. When adding a query over `posts`, add the `draft = 0`
+filter and a test — a forgotten filter leaks an unpublished post at its permalink
+and in the feed. Separately, every script and the app open `join(process.cwd(),
+'posts.db')`, so there is no env switch to point the import at a scratch DB: run
+it from a git worktree holding a copy (`sqlite3 posts.db ".backup 'copy.db'"`
+is safe even while the dev server has the file open).
+
+---
+
+## Sanity file attachments are links, not blocks
+
+Sanity images arrive as `image` blocks (re-encoded and uploaded by
+`ensureImage`), but PDFs and other files appear as ordinary link annotations
+whose `href` is `https://cdn.sanity.io/files/…`. They survive a naive import
+as dead-end Sanity URLs. `portableTextToMarkdown` takes a `fileHandler` that
+rewrites those hrefs; `validate-import.ts` flags any `sanity.io` left behind.
+
+---
+
 ## The nightly archive is a zip, not a git-committed tree
 
 Phase 7 was specified as "write `archive/YYYY/MM/DD/slug.md` per post, then
