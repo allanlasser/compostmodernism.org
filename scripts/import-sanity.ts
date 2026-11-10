@@ -3,9 +3,9 @@
  * Posts are inserted as drafts (draft=1) and backdated to their original publishedAt date.
  *
  * Usage:
- *   npx tsx --env-file=.env.local scripts/import-sanity.ts [--dry-run] [--id <sanityDocId>]
+ *   npx tsx --env-file=.env scripts/import-sanity.ts [--dry-run] [--id <sanityDocId>]
  *
- * Required env vars (from .env.local):
+ * Required env vars (from .env):
  *   SANITY_PROJECT, SANITY_DATASET, SANITY_TOKEN
  *   R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_URL
  */
@@ -85,7 +85,6 @@ const db = dryRun ? null : createDb(join(process.cwd(), 'posts.db'));
 
 const QUERY = `*[_type == "post" && defined(publishedAt)] | order(publishedAt asc) {
   _id,
-  "slug": slug.current,
   publishedAt,
   title,
   source->{url, title, type, author},
@@ -107,19 +106,8 @@ const QUERY = `*[_type == "post" && defined(publishedAt)] | order(publishedAt as
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-// Sanity slugs include a date prefix (e.g. "2023-05-14-on-digital-gardens").
-// Strip it so the URL path doesn't repeat the date.
-function stripDatePrefix(slug: string): string {
-	return slug.replace(/^\d{4}-\d{2}-\d{2}-?/, '');
-}
-
-function resolveSlug(sanitySlug: string | undefined, title: string | undefined, publishedAt: string): string {
-	if (sanitySlug) {
-		const stripped = stripDatePrefix(sanitySlug).trim();
-		if (stripped) return stripped;
-	}
-	if (title) return slugify(title);
-	return hashSlug(new Date(publishedAt).getTime());
+function resolveSlug(title: string | undefined, publishedAt: string): string {
+	return (title && slugify(title)) || hashSlug(new Date(publishedAt).getTime());
 }
 
 function r2KeyForAsset(assetId: string, publishedAt: string): string {
@@ -197,7 +185,7 @@ async function main() {
 	let imported = 0, skipped = 0, errored = 0;
 
 	for (const post of filtered) {
-		const slug = resolveSlug(post.slug, post.title ?? undefined, post.publishedAt);
+		const slug = resolveSlug(post.title ?? undefined, post.publishedAt);
 		const ts = new Date(post.publishedAt).getTime();
 		console.log(`→ ${post._id.slice(-12)}  ${post.publishedAt.slice(0, 10)}  "${slug}"`);
 
@@ -257,7 +245,6 @@ async function main() {
 
 interface SanityPost {
 	_id: string;
-	slug?: string;
 	publishedAt: string;
 	title?: string | null;
 	source?: {

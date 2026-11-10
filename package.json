@@ -13,9 +13,9 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
-    "import:sanity": "tsx --env-file=.env.local scripts/import-sanity.ts",
-    "import:dry": "tsx --env-file=.env.local scripts/import-sanity.ts --dry-run",
-    "validate:import": "tsx --env-file=.env.local scripts/validate-import.ts",
+    "import:sanity": "tsx --env-file=.env scripts/import-sanity.ts",
+    "import:dry": "tsx --env-file=.env scripts/import-sanity.ts --dry-run",
+    "validate:import": "tsx --env-file=.env scripts/validate-import.ts",
     "publish:drafts": "tsx scripts/publish-drafts.ts"
   },
   "dependencies": {

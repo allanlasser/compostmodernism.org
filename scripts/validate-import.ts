@@ -3,7 +3,7 @@
  * Checks for: non-empty body, no Sanity residue, R2-hosted images, correct backdating.
  *
  * Usage:
- *   npx tsx --env-file=.env.local scripts/validate-import.ts
+ *   npx tsx --env-file=.env scripts/validate-import.ts
  */
 
 import { join } from 'node:path';
