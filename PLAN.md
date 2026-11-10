@@ -1491,10 +1491,10 @@ background hue cycles hourly, so any static value would clash.
 
 ### Checkpoint 19c
 
-- [ ] `npm test` and `npm run check` green
-- [ ] `curl` of a tag page shows `#tag · compostmodernism`; any page links
+- [x] `npm test` and `npm run check` green
+- [x] `curl` of a tag page shows `#tag · compostmodernism`; any page links
       `apple-touch-icon.png`, which is 180×180 with no alpha channel
-- [ ] README, SPEC updated in the same commit
+- [x] README, SPEC updated in the same commit
 
 ---
 

@@ -696,14 +696,18 @@ The datetime zone is fixed because a preview is one static string and the
 container runs in UTC; the on-page Dateline can follow the reader's zone
 after hydration, a preview can't.
 
-The home and tag pages use a site card (`siteSocialMeta`): `compostmodernism`
-/ `A blog by Allan Lasser.`, `og:type` `website`, `og:url` the page itself.
+The home page uses a site card (`siteSocialMeta`): `compostmodernism` /
+`A blog by Allan Lasser.`, `og:type` `website`. Tag pages use a tag card
+(`tagSocialMeta`): `#food` / `Posts tagged food on compostmodernism, a blog
+by Allan Lasser.`, with `<title>` `#food · compostmodernism`. Both point
+`og:url` at the page itself.
 Absolute URLs come from `$SITE_URL` (default `https://compostmodernism.org`),
 which the root layout loader exposes as `siteUrl`.
 
 Other head elements: `+error.svelte` sets `<title>` (`Not found` for 404s,
 `Something went wrong` otherwise); admin pages carry `robots: noindex` and
-no `<title>`; `apple-touch-icon` reuses `favicon.png`. No `theme-color`,
+no `<title>`; `apple-touch-icon` is `static/apple-touch-icon.png`: 180×180, opaque, the
+favicon symbol in white at 72% scale on pine green `#0f4d3c`. No `theme-color`,
 because the background hue cycles through the full wheel every hour.
 
 ---
