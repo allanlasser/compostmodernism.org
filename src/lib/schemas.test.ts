@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { postInputSchema, postUpdateSchema, imageMetadataSchema } from './schemas';
+import {
+	postInputSchema,
+	postUpdateSchema,
+	imageMetadataSchema,
+	feedPageQuerySchema
+} from './schemas';
 
 describe('postInputSchema', () => {
 	it('requires non-empty body', () => {
@@ -92,5 +97,28 @@ describe('imageMetadataSchema', () => {
 		});
 		expect(r.success).toBe(true);
 		if (r.success) expect(r.data.title).toBe('Hello');
+	});
+});
+
+describe('feedPageQuerySchema', () => {
+	it('defaults offset to 0 and limit to 25', () => {
+		const r = feedPageQuerySchema.safeParse({});
+		expect(r.success && r.data).toEqual({ offset: 0, limit: 25 });
+	});
+
+	it('coerces query-string values to integers', () => {
+		const r = feedPageQuerySchema.safeParse({ offset: '50', limit: '10' });
+		expect(r.success && r.data).toEqual({ offset: 50, limit: 10 });
+	});
+
+	it('caps limit at 50', () => {
+		expect(feedPageQuerySchema.safeParse({ limit: '51' }).success).toBe(false);
+		expect(feedPageQuerySchema.safeParse({ limit: '50' }).success).toBe(true);
+	});
+
+	it('rejects negative, fractional, zero-limit and non-numeric values', () => {
+		for (const bad of [{ offset: '-1' }, { offset: '1.5' }, { limit: '0' }, { offset: 'abc' }]) {
+			expect(feedPageQuerySchema.safeParse(bad).success).toBe(false);
+		}
 	});
 });
