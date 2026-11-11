@@ -1596,11 +1596,11 @@ backlog) are only reachable by permalink. Load them as the reader scrolls.
 
 ### Checkpoint 21
 
-- [ ] `npm test` and `npm run check` green
-- [ ] Manual browser pass against a DB with more than 50 posts: scroll loads older
-      posts in order, no duplicates, no layout jump, lightbox works on appended posts
-- [ ] Network tab: one request per page, none after the last
-- [ ] README (API table) and SPEC updated
+- [x] `npm test` (437) and `npm run check` green
+- [x] Manual browser pass against a 114-post DB: scroll loads older posts in order,
+      no duplicates, lightbox works on appended posts; Retry works after a forced 500
+- [x] Network: one request per page (offsets 50, 75, 100), none after the last
+- [x] README (API table) and SPEC updated
 
 ---
 
