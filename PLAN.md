@@ -1555,6 +1555,56 @@ background hue cycles hourly, so any static value would clash.
 
 ---
 
+## Phase 21 — Infinite Scroll on the Home Feed
+
+The home feed renders the newest 50 posts and stops. Older posts (the Sanity
+backlog) are only reachable by permalink. Load them as the reader scrolls.
+
+### Design decisions (locked before coding)
+
+- **Server renders the first 50, as today.** No change to first paint, SEO of the
+  newest posts, or the RSS feed. The loader additionally returns `nextOffset`
+  (`null` when everything is already shown).
+- **One small public endpoint:** `GET /api/feed?offset=N&limit=M` returns
+  `{ posts, nextOffset }` from the existing `getPosts({ limit, offset })`, so drafts
+  are excluded for free. `limit` defaults to 25, capped at 50. Invalid input is a
+  `400 { error }` like every other API route.
+- **Client trigger:** an `IntersectionObserver` on a sentinel after the last item
+  with a generous `rootMargin`, so the next page is fetched before the reader
+  reaches the bottom. The observer is recreated after each page so a still-visible
+  sentinel (tall screen, short page) keeps loading.
+- **Safe against shifting data:** appended posts are de-duplicated by slug, since a
+  post published mid-scroll shifts every offset by one.
+- **Failure is visible, not silent:** on a failed fetch, auto-loading stops and a
+  Retry button appears. No retry loop.
+- **Out of scope:** tag pages (also limited to 50, rarely reached), the RSS feed,
+  and a no-JS "older posts" link (a possible follow-up; today there is none either).
+
+### Red → Green cycles
+
+```
+21.1  schema: feedPageQuerySchema coerces strings; defaults offset 0 / limit 25; caps limit at 50; rejects negatives and junk
+21.2  api: GET /api/feed returns posts with permalinks and the right nextOffset (null on the last page)
+21.3  api: invalid query → 400 { error }
+21.4  loader: returns nextOffset = 50 when more posts exist, null when the feed is complete
+21.5  page: no sentinel when nextOffset is null
+21.6  page: sentinel intersecting → fetches /api/feed?offset=N and appends in order
+21.7  page: duplicate slugs from the server are not rendered twice
+21.8  page: no concurrent fetches while one is in flight
+21.9  page: fetch failure → Retry button, no automatic refetch; Retry succeeds
+21.10 page: stops requesting once the server returns nextOffset null
+```
+
+### Checkpoint 21
+
+- [x] `npm test` (437) and `npm run check` green
+- [x] Manual browser pass against a 114-post DB: scroll loads older posts in order,
+      no duplicates, lightbox works on appended posts; Retry works after a forced 500
+- [x] Network: one request per page (offsets 50, 75, 100), none after the last
+- [x] README (API table) and SPEC updated
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

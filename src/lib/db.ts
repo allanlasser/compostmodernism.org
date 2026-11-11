@@ -411,6 +411,10 @@ export function createDb(path: string) {
 		setPostImages(existing.id, update.body);
 	}
 
+	function publishPost(slug: string): void {
+		raw.prepare('UPDATE posts SET draft = 0 WHERE slug = ?').run(slug);
+	}
+
 	function deletePost(slug: string): void {
 		raw.prepare('DELETE FROM posts WHERE slug = ?').run(slug);
 	}
@@ -427,6 +431,7 @@ export function createDb(path: string) {
 		getAllTags,
 		getPostCadence,
 		updatePost,
+		publishPost,
 		deletePost,
 		slugTaken,
 		getPostByOldPath,
@@ -464,6 +469,7 @@ export const getPostsByTag: Db['getPostsByTag'] = (slug, opts) =>
 export const getAllTags: Db['getAllTags'] = () => defaultDb().getAllTags();
 export const updatePost: Db['updatePost'] = (slug, update) =>
 	defaultDb().updatePost(slug, update);
+export const publishPost: Db['publishPost'] = (slug) => defaultDb().publishPost(slug);
 export const deletePost: Db['deletePost'] = (slug) => defaultDb().deletePost(slug);
 export const slugTaken: Db['slugTaken'] = (slug) => defaultDb().slugTaken(slug);
 export const getPostByOldPath: Db['getPostByOldPath'] = (oldPath) =>

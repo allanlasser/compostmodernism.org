@@ -58,6 +58,7 @@ This file is the architectural overview — what the running app actually is.
 │   │   └── api/
 │   │       ├── post/+server.ts            # POST  — create
 │   │       ├── post/[slug]/+server.ts     # PATCH — edit
+│   │       ├── feed/+server.ts            # GET   — next page of the home feed (infinite scroll)
 │   │       ├── upload/+server.ts          # POST  — image to R2 (also records in image ledger)
 │   │       └── session/+server.ts         # POST  — admin login → httpOnly cookie
 │   ├── hooks.server.ts                    # Bridges $env/dynamic/private into process.env for scripts
@@ -351,6 +352,20 @@ Records the resulting key in the `images` ledger.
 | 200 | `{ ok: true, url: string }` | Bytes uploaded to the *same* R2 key; `uploaded_at` bumped. `url` is unchanged from the prior version, so posts referencing the image stay intact. |
 
 **Request body:** `multipart/form-data` with an `image` file field.
+
+### `GET /api/feed`
+
+Public. One page of the home feed for infinite scroll: published posts in
+reverse-chronological order, each with its `permalink`. The home page renders the
+newest 50 on the server and then asks for the rest as the reader scrolls (an
+`IntersectionObserver` in `src/routes/+page.svelte`).
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| 200 | `{ posts: Post[], nextOffset: number \| null }` | `nextOffset` is `null` on the last page |
+| 400 | `{ error }` | Invalid query |
+
+**Query:** `offset` (integer ≥ 0, default 0), `limit` (integer 1–50, default 25).
 
 ### `GET /p/[token]`
 

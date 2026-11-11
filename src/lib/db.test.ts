@@ -839,6 +839,27 @@ describe('draft posts', () => {
 		expect(db.getDraftPosts().some((p) => p.slug === slug)).toBe(false);
 	});
 
+	it('publishPost flips draft to 0 and leaves every other field alone', () => {
+		const { slug, id } = db.insertPost({
+			body: 'b',
+			title: 'A Title',
+			url: 'https://example.com',
+			tags: ['x'],
+			draft: 1
+		});
+		db.publishPost(slug);
+		const post = db.getPostBySlug(slug)!;
+		expect(post.draft).toBe(0);
+		expect(post.title).toBe('A Title');
+		expect(post.url).toBe('https://example.com');
+		expect(post.tags.map((t) => t.name)).toEqual(['x']);
+		expect(post.id).toBe(id);
+	});
+
+	it('publishPost on an unknown slug is a no-op', () => {
+		expect(() => db.publishPost('nope')).not.toThrow();
+	});
+
 	it('insertPost defaults draft to 0', () => {
 		const { slug } = db.insertPost({ body: 'normal' });
 		const row = db.raw.prepare('SELECT draft FROM posts WHERE slug = ?').get(slug) as { draft: number };

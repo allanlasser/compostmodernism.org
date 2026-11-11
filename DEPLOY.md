@@ -134,17 +134,44 @@ The imported posts land as drafts, so the live site doesn't change until step 7.
 1. Add `SANITY_PROJECT`, `SANITY_DATASET` and `SANITY_TOKEN` (a read-only
    **Viewer** token) to `.env` on cornhill, then `docker compose up -d` so the
    container picks them up. The `R2_*` values are already there.
-2. `@sanity/client` is a devDependency and the image prunes dev deps, so install
-   it into the running container. It lasts until the next redeploy, which is
-   what you want:
+2. `@sanity/client` is a devDependency and the image prunes dev deps. Don't use
+   `npm install --no-save @sanity/client` here: npm sees the package already
+   declared in `package.json`, reports "up to date", and installs nothing. Install
+   it into a scratch directory and copy over only the packages that are missing.
+   The copy lasts until the next redeploy, which is what you want:
    ```
-   docker exec compostmodernism npm install --no-save @sanity/client
+   docker exec -i compostmodernism sh <<'EOF'
+   rm -rf /tmp/sc && mkdir /tmp/sc && cd /tmp/sc
+   npm init -y >/dev/null 2>&1 && npm install @sanity/client >/dev/null 2>&1
+   cd node_modules
+   for d in *; do
+     case "$d" in
+       @*) mkdir -p "/app/node_modules/$d"
+           for s in "$d"/*; do [ -e "/app/node_modules/$s" ] || cp -r "$s" "/app/node_modules/$s"; done ;;
+       *)  [ -e "/app/node_modules/$d" ] || cp -r "$d" "/app/node_modules/$d" ;;
+     esac
+   done
+   cd /app && node -e 'import("@sanity/client").then(() => console.log("client ok"))'
+   rm -rf /tmp/sc
+   EOF
    ```
-3. Back up first, and confirm the zip exists before continuing:
+   Expect `client ok`.
+3. Back up first, and confirm the file exists before continuing. This takes a
+   snapshot with SQLite's own backup API, which is safe while the app is running
+   (it is a separate, pre-import copy; the nightly `export-and-backup.ts` zip is
+   not a substitute):
    ```
-   docker exec compostmodernism npx tsx scripts/export-and-backup.ts
+   docker exec -i compostmodernism node - <<'EOF'
+   const D = require('better-sqlite3');
+   const out = '/app/archive/posts.pre-sanity-import-' + new Date().toISOString().replace(/[:.]/g, '-') + '.db';
+   new D('posts.db', { readonly: true }).backup(out).then(() => {
+     const b = new D(out, { readonly: true });
+     console.log(out, b.pragma('integrity_check', { simple: true }), 'posts', b.prepare('select count(*) n from posts').get().n);
+   });
+   EOF
    ls -l archive/
    ```
+   Expect `ok` and the post count you started with.
 4. Dry run, then the real import. Call `tsx` directly: the `npm run` aliases pass
    `--env-file=.env`, and the container has no `.env` file (Compose injects the
    variables).
