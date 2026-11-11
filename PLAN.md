@@ -1394,7 +1394,8 @@ test: PutObjectCommand called with bucket, r2Key, zip buffer, ContentType applic
 
 ### Checkpoint 18
 
-- [ ] `npm test` — all export/backup tests pass
+- [x] `npm test` — all export/backup tests pass (`scripts/**` added to the
+      vitest `node` project; before that they never ran in the suite)
 - [ ] `npx tsx scripts/export-and-backup.ts` (with real `.env`) — writes
       `archive/YYYY-MM-DD.zip`; `unzip -l` shows `posts.db` + the
       `posts/` tree

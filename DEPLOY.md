@@ -156,9 +156,10 @@ The imported posts land as drafts, so the live site doesn't change until step 7.
    EOF
    ```
    Expect `client ok`.
-3. Back up first, and confirm the file exists before continuing. Don't use
-   `scripts/export-and-backup.ts` for this until #13 is fixed (it fails on a
-   missing `adm-zip`). SQLite's own backup API is safe while the app is running:
+3. Back up first, and confirm the file exists before continuing. This takes a
+   snapshot with SQLite's own backup API, which is safe while the app is running
+   (it is a separate, pre-import copy; the nightly `export-and-backup.ts` zip is
+   not a substitute):
    ```
    docker exec -i compostmodernism node - <<'EOF'
    const D = require('better-sqlite3');
@@ -199,8 +200,14 @@ If it goes wrong, restore `posts.db` from the zip taken in step 3.
 
 ## After everything works
 
-- Add the nightly cron on cornhill:
+- Add the nightly cron on cornhill. The log lives in the home directory because
+  cron runs as `allan`, who can't create files in `/var/log`; if the redirect
+  fails, the shell never starts `docker exec` and nothing is logged.
   ```
-  0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1
+  mkdir -p /home/allan/logs
+  0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /home/allan/logs/compostmodernism-backup.log 2>&1
   ```
+  (The `mkdir` is a shell command; only the `0 3 * * *` line goes in the crontab.)
+  Then run the job once by hand and confirm `archive/YYYY-MM-DD.zip` exists and
+  R2 has `backups/YYYY-MM-DD.zip`.
 - Set a Cloudflare R2 lifecycle rule expiring `backups/` after 90 days.

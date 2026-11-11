@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import AdmZip from 'adm-zip';
 import {
@@ -158,5 +159,12 @@ describe('uploadBackup', () => {
 		expect(cmd.input.Key).toBe('backups/2024-07-01.zip');
 		expect(cmd.input.Body).toBe(buffer);
 		expect(cmd.input.ContentType).toBe('application/zip');
+	});
+});
+
+describe('production image dependencies', () => {
+	it('lists adm-zip under dependencies, since the Dockerfile prunes devDependencies', () => {
+		const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+		expect(Object.keys(pkg.dependencies)).toContain('adm-zip');
 	});
 });
