@@ -5,6 +5,25 @@ entries go on top.
 
 ---
 
+## The nightly backup never ran: a devDependency, an unwritable log, and tests that didn't run
+
+Issue #13. Three things stacked, and each hid the others:
+
+- `adm-zip` was a devDependency. The Dockerfile's builder stage runs
+  `npm prune --omit=dev` and the runtime copies that `node_modules`, so anything a
+  `docker exec`'d script imports must be in `dependencies`. `tsx` is, which is why
+  only this one package was missing.
+- The cron redirected to `/var/log/...`, which `allan` can't write. The shell fails
+  on the redirect before `docker exec` runs, so there was no error in any log.
+- `vite.config.ts` only included `src/**/*.test.ts`, so `scripts/*.test.ts` never
+  ran under `npm test`. Green CI said nothing about the backup script.
+
+Any script run via `docker exec` shares the first trap (`import-sanity.ts` imports
+`@sanity/client`, still a devDependency). After a deploy, run the job once by hand
+and look for the zip; a cron that has never logged anything has never run.
+
+---
+
 ## `npm test` does not type-check; fixtures drift when a type gains a required field
 
 Adding required `draft: number` to `PostRow` left every hand-built `Post` fixture
