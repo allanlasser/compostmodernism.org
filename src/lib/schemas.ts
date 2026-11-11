@@ -60,3 +60,10 @@ export const imageMetadataSchema = z.object({
 
 export type ImageMetadataInput = z.input<typeof imageMetadataSchema>;
 export type ImageMetadataParsed = z.infer<typeof imageMetadataSchema>;
+
+export const feedPageQuerySchema = z.object({
+	offset: z.coerce.number().int().min(0).default(0),
+	limit: z.coerce.number().int().min(1).max(50).default(25)
+});
+
+export type FeedPageQuery = z.infer<typeof feedPageQuerySchema>;

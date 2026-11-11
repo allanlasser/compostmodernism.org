@@ -491,6 +491,13 @@ export async function load() {
 }
 ```
 
+**Infinite scroll.** The loader renders only the newest 50 posts and also returns
+`nextOffset` (`null` when the whole feed is already shown). The page requests further
+pages from `GET /api/feed?offset=N` when a sentinel after the last post nears the
+viewport, appends them de-duplicated by slug (a post published mid-scroll shifts every
+offset), and shows a Retry button instead of looping if a request fails. Tag pages and
+the RSS feed keep their fixed 50-post limit. There is no no-JS "older posts" link.
+
 ### `src/routes/+page.svelte` — Blog index
 
 ```svelte

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Post } from '$lib/db';
 
-vi.mock('$lib/db', () => ({ getPosts: vi.fn() }));
+vi.mock('$lib/db', () => ({ getPosts: vi.fn(), countPosts: vi.fn() }));
 
 import { load } from './+page.server';
-import { getPosts } from '$lib/db';
+import { getPosts, countPosts } from '$lib/db';
 
 const mockGetPosts = vi.mocked(getPosts);
+const mockCount = vi.mocked(countPosts);
 
 function makePost(over: Partial<Post> = {}): Post {
 	const created_at = over.created_at ?? Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -27,6 +28,7 @@ function makePost(over: Partial<Post> = {}): Post {
 
 beforeEach(() => {
 	mockGetPosts.mockReset();
+	mockCount.mockReset();
 });
 
 describe('feed loader', () => {
@@ -43,5 +45,26 @@ describe('feed loader', () => {
 		]);
 		const result = (await load({} as never)) as { feed: { slug: string; permalink: string }[] };
 		expect(result.feed.map((p: { slug: string }) => p.slug)).toEqual(['newest', 'older']);
+	});
+
+	it('nextOffset is the number of posts shown when more remain', async () => {
+		mockGetPosts.mockReturnValue([makePost({ slug: 'a' }), makePost({ slug: 'b' })]);
+		mockCount.mockReturnValue(120);
+		const result = (await load({} as never)) as { nextOffset: number | null };
+		expect(result.nextOffset).toBe(2);
+	});
+
+	it('nextOffset is null when the whole feed is already shown', async () => {
+		mockGetPosts.mockReturnValue([makePost({ slug: 'a' }), makePost({ slug: 'b' })]);
+		mockCount.mockReturnValue(2);
+		const result = (await load({} as never)) as { nextOffset: number | null };
+		expect(result.nextOffset).toBeNull();
+	});
+
+	it('asks for the newest 50 posts', async () => {
+		mockGetPosts.mockReturnValue([]);
+		mockCount.mockReturnValue(0);
+		await load({} as never);
+		expect(mockGetPosts).toHaveBeenCalledWith({ limit: 50 });
 	});
 });
