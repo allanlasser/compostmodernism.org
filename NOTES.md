@@ -5,6 +5,20 @@ entries go on top.
 
 ---
 
+## `updatePost` overwrites omitted fields with null; the PATCH route hides this
+
+`db.updatePost` writes `title = update.title ?? null` and `url = update.url ?? null`,
+so any caller that passes only some fields wipes the rest. `PATCH /api/post/[slug]`
+is safe only because the route merges the existing row in first. `publish-drafts.ts`
+called `updatePost(slug, { body, draft: 0 })` and silently erased the title and link
+URL of all 34 imported posts, while its own log lines (printed from the in-memory
+row) still showed the titles. `validate-import` ran *before* publishing, so it
+couldn't catch it either. To change one column, add a narrow db method (see
+`publishPost`) instead of calling `updatePost`. After any bulk script, spot-check
+field values in the database, not just counts and log output.
+
+---
+
 ## `npm test` does not type-check; fixtures drift when a type gains a required field
 
 Adding required `draft: number` to `PostRow` left every hand-built `Post` fixture

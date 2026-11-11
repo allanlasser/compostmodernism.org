@@ -49,7 +49,7 @@ async function main() {
 		if (dryRun) {
 			console.log(`[dry-run] would publish: ${url}  "${post.title ?? '(untitled)'}"`);
 		} else {
-			db.updatePost(post.slug, { body: post.body, draft: 0 });
+			db.publishPost(post.slug);
 			console.log(`✓ published: ${url}  "${post.title ?? '(untitled)'}"`);
 		}
 		count++;
