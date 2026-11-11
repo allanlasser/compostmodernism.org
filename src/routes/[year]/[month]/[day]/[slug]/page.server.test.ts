@@ -22,6 +22,7 @@ function makePost(over: Partial<Post> = {}): Post {
 		title: 'Hello',
 		url: null,
 		created_at: ts,
+		draft: 0,
 		type: 'post',
 		date: ts,
 		tags: [],
@@ -43,6 +44,12 @@ describe('single-post loader', () => {
 		} as never);
 		expect((result as { post: Post & { permalink: string } }).post.slug).toBe('hello');
 		expect((result as { post: { permalink: string } }).post.permalink).toBe('/2026/01/15/hello');
+	});
+
+	it('looks the post up without opting in to drafts', async () => {
+		mockGet.mockReturnValue(makePost());
+		await load({ params: { year: '2026', month: '01', day: '15', slug: 'hello' } } as never);
+		expect(mockGet).toHaveBeenCalledWith('hello');
 	});
 
 	it('unknown slug → throws 404', async () => {

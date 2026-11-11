@@ -24,6 +24,7 @@ export interface PostRow {
 	title: string | null;
 	url: string | null;
 	created_at: number;
+	draft: number;
 }
 
 export interface Post extends PostRow {
@@ -38,6 +39,8 @@ export interface PostInput {
 	url?: string | null;
 	tags?: string[];
 	slug?: string;
+	created_at?: number;
+	draft?: number;
 }
 
 export interface PostUpdate {
@@ -47,6 +50,11 @@ export interface PostUpdate {
 	tags?: string[];
 	slug?: string;
 	created_at?: number;
+	draft?: number;
+}
+
+export interface LookupOptions {
+	includeDrafts?: boolean;
 }
 
 export interface OldPath {
@@ -225,16 +233,16 @@ export function createDb(path: string) {
 	}
 
 	function insertPost(input: PostInput): InsertResult {
-		const now = Date.now();
+		const ts = input.created_at ?? Date.now();
 		const slug = input.slug
 			? input.slug
-			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(now));
+			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(ts));
 		const result = raw
 			.prepare(
-				`INSERT INTO posts (slug, body, title, url, created_at)
-				 VALUES (?, ?, ?, ?, ?)`
+				`INSERT INTO posts (slug, body, title, url, created_at, draft)
+				 VALUES (?, ?, ?, ?, ?, ?)`
 			)
-			.run(slug, input.body, input.title ?? null, input.url ?? null, now);
+			.run(slug, input.body, input.title ?? null, input.url ?? null, ts, input.draft ?? 0);
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
 		setPostImages(id, input.body);
@@ -243,27 +251,36 @@ export function createDb(path: string) {
 
 	function getPosts({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): Post[] {
 		const rows = raw
-			.prepare('SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+			.prepare('SELECT * FROM posts WHERE draft = 0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+			.all(limit, offset) as PostRow[];
+		return rows.map(hydrate);
+	}
+
+	function getDraftPosts({ limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}): Post[] {
+		const rows = raw
+			.prepare('SELECT * FROM posts WHERE draft = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
 			.all(limit, offset) as PostRow[];
 		return rows.map(hydrate);
 	}
 
 	function countPosts(): number {
-		const row = raw.prepare('SELECT COUNT(*) AS n FROM posts').get() as { n: number };
+		const row = raw.prepare('SELECT COUNT(*) AS n FROM posts WHERE draft = 0').get() as { n: number };
 		return row.n;
 	}
 
-	function getPostBySlug(slug: string): Post | null {
-		const row = raw.prepare('SELECT * FROM posts WHERE slug = ?').get(slug) as
-			| PostRow
-			| undefined;
+	function getPostBySlug(slug: string, { includeDrafts = false }: LookupOptions = {}): Post | null {
+		const row = raw.prepare('SELECT * FROM posts WHERE slug = ? AND (draft = 0 OR ?)').get(
+			slug,
+			includeDrafts ? 1 : 0
+		) as PostRow | undefined;
 		return row ? hydrate(row) : null;
 	}
 
-	function getPostById(id: number): Post | null {
-		const row = raw.prepare('SELECT * FROM posts WHERE id = ?').get(id) as
-			| PostRow
-			| undefined;
+	function getPostById(id: number, { includeDrafts = false }: LookupOptions = {}): Post | null {
+		const row = raw.prepare('SELECT * FROM posts WHERE id = ? AND (draft = 0 OR ?)').get(
+			id,
+			includeDrafts ? 1 : 0
+		) as PostRow | undefined;
 		return row ? hydrate(row) : null;
 	}
 
@@ -278,7 +295,7 @@ export function createDb(path: string) {
 				`SELECT p.* FROM posts p
 				 JOIN post_tags pt ON pt.post_id = p.id
 				 JOIN tags t       ON t.id      = pt.tag_id
-				 WHERE t.slug = ?
+				 WHERE t.slug = ? AND p.draft = 0
 				 ORDER BY p.created_at DESC, p.id DESC
 				 LIMIT ?`
 			)
@@ -292,6 +309,7 @@ export function createDb(path: string) {
 				`SELECT t.name, t.slug, COUNT(pt.post_id) AS count
 				 FROM tags t
 				 JOIN post_tags pt ON pt.tag_id = t.id
+				 JOIN posts p      ON p.id      = pt.post_id AND p.draft = 0
 				 GROUP BY t.id
 				 ORDER BY count DESC, t.name ASC`
 			)
@@ -316,7 +334,8 @@ export function createDb(path: string) {
 			.prepare(
 				`SELECT p.* FROM posts p
 				 JOIN slug_redirects r ON r.post_id = p.id
-				 WHERE r.old_year = ? AND r.old_month = ? AND r.old_day = ? AND r.old_slug = ?`
+				 WHERE r.old_year = ? AND r.old_month = ? AND r.old_day = ? AND r.old_slug = ?
+				   AND p.draft = 0`
 			)
 			.get(oldPath.year, oldPath.month, oldPath.day, oldPath.slug) as PostRow | undefined;
 		return row ? hydrate(row) : null;
@@ -335,7 +354,7 @@ export function createDb(path: string) {
 			.prepare(
 				`SELECT p.* FROM posts p
 				 JOIN shortlink_redirects r ON r.post_id = p.id
-				 WHERE r.old_token = ?`
+				 WHERE r.old_token = ? AND p.draft = 0`
 			)
 			.get(token) as PostRow | undefined;
 		return row ? hydrate(row) : null;
@@ -346,6 +365,7 @@ export function createDb(path: string) {
 			.prepare(
 				`SELECT date(created_at / 1000, 'unixepoch') as date, COUNT(*) as count
 				 FROM posts
+				 WHERE draft = 0
 				 GROUP BY date
 				 ORDER BY date`
 			)
@@ -354,8 +374,8 @@ export function createDb(path: string) {
 
 	function updatePost(slug: string, update: PostUpdate): void {
 		const existing = raw
-			.prepare('SELECT id, slug, created_at FROM posts WHERE slug = ?')
-			.get(slug) as { id: number; slug: string; created_at: number } | undefined;
+			.prepare('SELECT id, slug, created_at, draft FROM posts WHERE slug = ?')
+			.get(slug) as { id: number; slug: string; created_at: number; draft: number } | undefined;
 		if (!existing) return;
 
 		const newSlug = update.slug ?? existing.slug;
@@ -376,13 +396,14 @@ export function createDb(path: string) {
 		}
 
 		raw.prepare(
-			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ? WHERE id = ?'
+			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ?, draft = ? WHERE id = ?'
 		).run(
 			update.body,
 			update.title ?? null,
 			update.url ?? null,
 			newSlug,
 			newCreatedAt,
+			update.draft ?? existing.draft,
 			existing.id
 		);
 
@@ -398,6 +419,7 @@ export function createDb(path: string) {
 		raw,
 		insertPost,
 		getPosts,
+		getDraftPosts,
 		countPosts,
 		getPostBySlug,
 		getPostById,
@@ -432,9 +454,11 @@ function defaultDb(): Db {
 
 export const insertPost: Db['insertPost'] = (input) => defaultDb().insertPost(input);
 export const getPosts: Db['getPosts'] = (opts) => defaultDb().getPosts(opts);
+export const getDraftPosts: Db['getDraftPosts'] = (opts) => defaultDb().getDraftPosts(opts);
 export const countPosts: Db['countPosts'] = () => defaultDb().countPosts();
-export const getPostBySlug: Db['getPostBySlug'] = (slug) => defaultDb().getPostBySlug(slug);
-export const getPostById: Db['getPostById'] = (id) => defaultDb().getPostById(id);
+export const getPostBySlug: Db['getPostBySlug'] = (slug, opts) =>
+	defaultDb().getPostBySlug(slug, opts);
+export const getPostById: Db['getPostById'] = (id, opts) => defaultDb().getPostById(id, opts);
 export const getPostsByTag: Db['getPostsByTag'] = (slug, opts) =>
 	defaultDb().getPostsByTag(slug, opts);
 export const getAllTags: Db['getAllTags'] = () => defaultDb().getAllTags();

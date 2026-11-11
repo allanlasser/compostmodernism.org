@@ -1406,7 +1406,65 @@ test: PutObjectCommand called with bucket, r2Key, zip buffer, ContentType applic
 
 ---
 
-## Phase 19 — Social Sharing Previews
+## Phase 19 — Sanity Import & Draft Posts
+
+One-time import of the backlog from the Sanity-hosted blog. Imported posts
+land as drafts (`posts.draft = 1`), are inspected, then flipped to published
+with `scripts/publish-drafts.ts`.
+
+### Design decisions (locked before coding)
+
+- **Drafts are invisible to every public read path.** Safe default: each
+  single-post lookup excludes drafts unless the caller opts in with
+  `{ includeDrafts: true }`. Opt-in callers are the admin edit page and the
+  authed `PATCH`/`DELETE` API; public routes never pass it.
+- **Redirect lookups** (`getPostByOldPath`, `getPostByOldToken`) always
+  exclude drafts. A draft has never been public, so there is nothing to
+  redirect from.
+- **Aggregates count published posts only:** tag listing and counts, and the
+  admin cadence graph. Backdated drafts would otherwise distort the graph.
+- **Slugs follow the app's normal rule** (slugified title, else
+  `hashSlug(created_at)`); Sanity's own slugs are ignored. URLs are
+  `/YYYY/MM/DD/<slug>` using the original `publishedAt`.
+- **Assets are rehosted in R2.** Images are re-encoded to WebP under
+  `images/…` (recorded in the images ledger). File attachments linked from
+  post bodies (`cdn.sanity.io/files/…`) are copied byte-for-byte to
+  `files/YYYY/MM/DD/<hash>.<ext>` and are *not* in the images ledger.
+
+### Done (commits on `sanity-import`)
+
+- [x] Migration `004_draft.sql`; `draft` on insert/update, API schemas and routes
+- [x] `portable-text.ts` converter (+ file-link rehosting hook)
+- [x] `scripts/import-sanity.ts`, `validate-import.ts`, `publish-drafts.ts`
+- [x] `Post` test fixtures carry `draft: 0`; `npm run check` clean
+
+### Red → Green cycles (draft visibility)
+
+```
+19.1  db: getPostBySlug excludes drafts by default; includeDrafts returns them
+19.2  db: getPostById excludes drafts by default; includeDrafts returns them
+19.3  db: getPostByOldPath / getPostByOldToken exclude drafts
+19.4  db: getPostsByTag excludes drafts
+19.5  db: getAllTags counts published posts only; draft-only tags omitted
+19.6  db: getPostCadence counts published posts only
+19.7  route: /YYYY/MM/DD/<slug> for a draft → 404
+19.8  route: /p/<token> for a draft → 404
+19.9  route: admin edit page and PATCH/DELETE API still load drafts
+```
+
+### Checkpoint 19
+
+- [x] `npm test` and `npm run check` green
+- [x] No public route returns a draft (cycles 19.1–19.8; also confirmed against
+      the dev server: a draft 404s at its permalink and is absent from `/` and the feed)
+- [x] Import run against a copy of `posts.db`; `validate:import` passes
+- [x] Imported posts inspected in the browser (images, lightbox, feed)
+- [x] Real `posts.db` backed up, then imported into (34 posts, published)
+- [x] README, SPEC, NOTES updated
+
+---
+
+## Phase 20 — Social Sharing Previews
 
 **Goal:** Pasting a post link into iMessage, Slack, Bluesky, etc. unfurls a
 preview card. Today the site emits no `<meta>` tags at all.
@@ -1449,14 +1507,12 @@ preview card. Today the site emits no `<meta>` tags at all.
 10. `layout.server.test.ts`: loader returns `siteUrl` from `$SITE_URL`
 11. Post, home, and tag pages render their social meta
 
-### Checkpoint 19
-
-- [x] `npm test` and `npm run check` green
+### Checkpoint 20
 - [x] Single-post HTML (via `curl`) contains `og:title`, `og:url`,
       `og:description`, `og:image` where applicable
 - [x] README, SPEC updated in the same commit
 
-### 19b — Remaining head elements
+### 20b — Remaining head elements
 
 Admin pages stay untitled by choice. `theme-color` is skipped: the
 background hue cycles hourly, so any static value would clash.
@@ -1468,14 +1524,14 @@ background hue cycles hourly, so any static value would clash.
 3. `app.html` → `<link rel="apple-touch-icon">` to `favicon.png` (static
    markup, verified via `curl` rather than a unit test)
 
-### Checkpoint 19b
+### Checkpoint 20b
 
 - [x] `npm test` and `npm run check` green
 - [x] `curl` of an unknown URL shows the error title; `/admin/login`
       shows `noindex`; any page shows `apple-touch-icon`
 - [x] README, SPEC updated in the same commit
 
-### 19c — Tag titles and a solid touch icon
+### 20c — Tag titles and a solid touch icon
 
 - Tag pages get their own card: `og:title` `#food`, `<title>`
   `#food · compostmodernism`, description `Posts tagged food on
@@ -1489,7 +1545,7 @@ background hue cycles hourly, so any static value would clash.
    description, tag URL, `website` type
 2. Tag page renders `og:title` `#food`
 
-### Checkpoint 19c
+### Checkpoint 20c
 
 - [x] `npm test` and `npm run check` green
 - [x] `curl` of a tag page shows `#tag · compostmodernism`; any page links

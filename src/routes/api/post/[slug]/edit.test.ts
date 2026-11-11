@@ -39,6 +39,7 @@ const existing = {
 	title: 'Old Title',
 	url: null,
 	created_at: 1700000000000,
+	draft: 0,
 	type: 'post' as const,
 	date: 1700000000000,
 	tags: []
@@ -56,6 +57,26 @@ describe('PATCH /api/post/[slug]', () => {
 	it('401 when unauthorized', async () => {
 		const res = await PATCH({ request: req({}), params: { slug: 'hello' } } as never);
 		expect(res.status).toBe(401);
+	});
+
+	it('PATCH looks the post up with drafts included', async () => {
+		mockGet.mockReturnValue({ ...existing, draft: 1 });
+		await PATCH({
+			request: req({ draft: 0 }, 'Bearer test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(mockGet).toHaveBeenCalledWith('hello', { includeDrafts: true });
+	});
+
+	it('DELETE looks the post up with drafts included', async () => {
+		mockGet.mockReturnValue({ ...existing, draft: 1 });
+		await DELETE({
+			request: delReq(),
+			cookies: cookies('test-secret'),
+			params: { slug: 'hello' }
+		} as never);
+		expect(mockGet).toHaveBeenCalledWith('hello', { includeDrafts: true });
+		expect(mockDelete).toHaveBeenCalledWith('hello');
 	});
 
 	it('404 when slug does not exist', async () => {

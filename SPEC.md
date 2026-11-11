@@ -248,6 +248,7 @@ The current baseline creates `posts`, `tags`, `post_tags`, `images`, and
 - A post with a `url` must also have a `title` (enforced in the endpoint)
 - `tags` — one row per unique tag; `name` is display text, `slug` is URL-safe
 - `post_tags` — join table; cascades deletes so removing a post cleans up its tag rows
+- `draft` — `0` published (default), `1` hidden draft (migration `004`). Every public read path excludes drafts; see §16
 - `images` — append-only ledger of R2 keys; `post_images` join table maps body URLs to ledger rows (see §15)
 
 ### `src/lib/migrate.ts`
@@ -1671,6 +1672,27 @@ side-effect.
   uploads through `/api/upload` create rows.
 
 ---
+
+## 16. Sanity Import and Draft Posts
+
+The backlog from the previous Sanity-hosted blog is imported once, as drafts, then
+published after inspection.
+
+- **Why a draft flag, not a staging DB.** Importing straight into `posts.db` would
+  publish 34 backdated posts the instant they landed. `posts.draft` lets the import
+  and the review be separate steps against the real database.
+- **Safe default.** Single-post lookups take `{ includeDrafts = false }`; only the
+  admin edit page and the authed `PATCH`/`DELETE` API pass `true`. Redirect lookups,
+  tag listings/counts and the cadence graph never include drafts. A new public read
+  path is therefore safe unless someone opts in on purpose.
+- **Identity.** Slug = slugified title, else `hashSlug(created_at)` (the app's normal
+  rule; Sanity's slugs are discarded). `created_at` = Sanity `publishedAt`, so
+  permalinks are `/YYYY/MM/DD/<slug>` at the original date.
+- **Assets.** Images are re-encoded to WebP under `images/YYYY/MM/DD/<hash>.webp` and
+  recorded in the image ledger. File attachments linked from a body
+  (`cdn.sanity.io/files/…`) are copied unchanged to `files/YYYY/MM/DD/<hash>.<ext>`
+  and are not in the ledger. Sanity's own links are never left in a body.
+- **Idempotence.** Re-running skips posts whose slug already exists.
 
 ## Content Workflows Summary
 

@@ -126,6 +126,49 @@ script over SSH" step.
 - Edit and save a post — change persists.
 - `docker logs compostmodernism` is quiet.
 
+## 10. Import the Sanity backlog (one-time)
+
+Run on cornhill after the deploy that ships migration `004` (it applies on boot).
+The imported posts land as drafts, so the live site doesn't change until step 7.
+
+1. Add `SANITY_PROJECT`, `SANITY_DATASET` and `SANITY_TOKEN` (a read-only
+   **Viewer** token) to `.env` on cornhill, then `docker compose up -d` so the
+   container picks them up. The `R2_*` values are already there.
+2. `@sanity/client` is a devDependency and the image prunes dev deps, so install
+   it into the running container. It lasts until the next redeploy, which is
+   what you want:
+   ```
+   docker exec compostmodernism npm install --no-save @sanity/client
+   ```
+3. Back up first, and confirm the zip exists before continuing:
+   ```
+   docker exec compostmodernism npx tsx scripts/export-and-backup.ts
+   ls -l archive/
+   ```
+4. Dry run, then the real import. Call `tsx` directly: the `npm run` aliases pass
+   `--env-file=.env`, and the container has no `.env` file (Compose injects the
+   variables).
+   ```
+   docker exec compostmodernism npx tsx scripts/import-sanity.ts --dry-run
+   docker exec compostmodernism npx tsx scripts/import-sanity.ts
+   ```
+   The image ledger is empty here, so every image and PDF is re-uploaded to the
+   same R2 keys (identical bytes, harmless but slow). Posts whose slug already
+   exists are skipped, never overwritten.
+5. Validate:
+   ```
+   docker exec compostmodernism npx tsx scripts/validate-import.ts
+   ```
+   Expect all passed, 0 failed.
+6. Spot-check that drafts are hidden: a draft permalink such as
+   `/2025/01/06/clip` should 404 and not appear in `/` or `/feeds/posts.xml`.
+7. Publish: `docker exec compostmodernism npx tsx scripts/publish-drafts.ts`
+   (`--dry-run` to preview, `--before YYYY-MM-DD` to publish in stages).
+8. Remove the `SANITY_*` lines from `.env` and revoke the token in the Sanity
+   console.
+
+If it goes wrong, restore `posts.db` from the zip taken in step 3.
+
 ---
 
 ## After everything works
