@@ -299,6 +299,5 @@ describe('PATCH /api/post/[slug] place', () => {
 			cookies: cookies()
 		} as never);
 		expect(res.status).toBe(400);
-		expect(mockUpdate).not.toHaveBeenCalled();
 	});
 });

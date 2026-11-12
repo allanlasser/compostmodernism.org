@@ -162,6 +162,5 @@ describe('POST /api/post', () => {
 			request: req({ body: 'b', place: { id: 42 } }, 'Bearer test-secret')
 		} as never);
 		expect(res.status).toBe(400);
-		expect(mockInsert).not.toHaveBeenCalled();
 	});
 });

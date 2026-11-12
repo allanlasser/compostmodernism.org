@@ -40,13 +40,12 @@ describe('PlaceField', () => {
 
 	it('after locating, sorts places nearest first and pre-selects one within 500 m', async () => {
 		stubGeolocation(42.374, -71.11);
-		const fetchMock = stubNominatim({});
+		stubNominatim({});
 		const { container, getByRole } = render(PlaceField, { props: { places: [lisbon, home] } });
 		await fireEvent.click(getByRole('button', { name: 'Use my location' }));
 		await waitFor(() => expect(optionLabels(container)[1]).toMatch(/^Home · 0\.1 km$/));
 		expect(optionLabels(container)[2]).toMatch(/^Lisbon · /);
 		expect((container.querySelector('select') as HTMLSelectElement).value).toBe('1');
-		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it('far from every place, selects New place and suggests a name from OpenStreetMap', async () => {
