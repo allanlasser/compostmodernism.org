@@ -7,12 +7,12 @@ import {
 	S3Client,
 	type PutObjectCommandInput
 } from '@aws-sdk/client-s3';
-import { createDb, type Post } from '../src/lib/db';
+import { createDb, type PlaceRow, type Post } from '../src/lib/db';
 import { dateParts, permalink } from '../src/lib/slug';
 
 export const SITE_ORIGIN = 'https://compostmodernism.org';
 
-export function renderFrontmatter(post: Post): string {
+export function renderFrontmatter(post: Post, place?: PlaceRow | null): string {
 	const lines = [
 		'---',
 		`id: ${post.id}`,
@@ -25,6 +25,14 @@ export function renderFrontmatter(post: Post): string {
 	if (post.tags.length) {
 		lines.push('tags:');
 		for (const tag of post.tags) lines.push(`  - ${tag.name}`);
+	}
+	if (place) {
+		lines.push(
+			'place:',
+			`  name: ${JSON.stringify(place.name)}`,
+			`  latitude: ${place.latitude}`,
+			`  longitude: ${place.longitude}`
+		);
 	}
 	lines.push('---', '', post.body, '');
 	return lines.join('\n');
@@ -43,11 +51,13 @@ export function r2Key(date: Date): string {
 	return `backups/${archiveFilename(date)}`;
 }
 
-export function buildArchive(posts: Post[], dbBytes: Buffer): Buffer {
+export function buildArchive(posts: Post[], dbBytes: Buffer, places: PlaceRow[] = []): Buffer {
+	const placesById = new Map(places.map((p) => [p.id, p]));
 	const zip = new AdmZip();
 	zip.addFile('posts.db', dbBytes);
 	for (const post of posts) {
-		zip.addFile(archiveEntryPath(post), Buffer.from(renderFrontmatter(post), 'utf8'));
+		const place = post.place_id === null ? null : placesById.get(post.place_id);
+		zip.addFile(archiveEntryPath(post), Buffer.from(renderFrontmatter(post, place), 'utf8'));
 	}
 	return zip.toBuffer();
 }
@@ -75,11 +85,12 @@ async function main(): Promise<void> {
 	const dbPath = join(process.cwd(), 'posts.db');
 	const db = createDb(dbPath);
 	const posts = db.getPosts({ limit: 1_000_000 });
+	const places = db.getPlaces();
 	db.raw.close();
 
 	const now = new Date();
 	const dbBytes = readFileSync(dbPath);
-	const zipBuffer = buildArchive(posts, dbBytes);
+	const zipBuffer = buildArchive(posts, dbBytes, places);
 
 	const filename = archiveFilename(now);
 	const localPath = join(process.cwd(), 'archive', filename);

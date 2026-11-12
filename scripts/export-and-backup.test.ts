@@ -23,11 +23,26 @@ function post(overrides: Partial<Post> = {}): Post {
 		type: 'post',
 		date: Date.UTC(2024, 6, 1, 12, 0, 0),
 		tags: [],
+		draft: 0,
+		place_id: null,
+		place: null,
 		...overrides
 	};
 }
 
 describe('renderFrontmatter', () => {
+	it('includes the place name and coordinates when given one', () => {
+		const md = renderFrontmatter(post({ place_id: 3 }), {
+			id: 3,
+			name: 'Lisbon, Portugal',
+			slug: 'lisbon-portugal',
+			latitude: 38.7223,
+			longitude: -9.1393,
+			created_at: 0
+		});
+		expect(md).toContain('place:\n  name: "Lisbon, Portugal"\n  latitude: 38.7223\n  longitude: -9.1393\n');
+	});
+
 	it('renders id, slug, created_at, and absolute permalink', () => {
 		const md = renderFrontmatter(post());
 		expect(md).toMatch(/^---\n/);

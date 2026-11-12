@@ -21,6 +21,8 @@ function makePost(over: Partial<Post> = {}): Post {
 		type: 'post',
 		date: ts,
 		tags: [],
+		place_id: null,
+		place: null,
 		...over
 	};
 }
