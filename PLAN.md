@@ -1660,10 +1660,12 @@ one place collects many posts and gets its own page, like a tag.
 
 ### Checkpoint 22
 
-- [ ] `npm test` and `npm run check` green
-- [ ] Manual browser pass: locate, create a place, reuse it on a second post, clear it
-- [ ] Place page lists only published posts; page source contains no coordinates
-- [ ] README (API table, layout), SPEC updated
+- [x] `npm test` (497) and `npm run check` green
+- [x] Manual browser pass (Playwright, geolocation emulated, Nominatim stubbed):
+      locate → "Cambridge, Massachusetts" suggested → publish; second post at the same
+      spot pre-selects it (0.0 km); clearing on edit sends `place: null`
+- [x] Place page lists only published posts; home and place page source contain no coordinates
+- [x] README (API table, layout, Places), SPEC §17, NOTES updated
 
 ---
 
