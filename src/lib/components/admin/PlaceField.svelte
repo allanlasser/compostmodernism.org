@@ -144,13 +144,44 @@
 		gap: 0.4em;
 	}
 
-	select {
+	label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25em;
+		font-size: var(--size-meta);
+		color: var(--color-ink-soft);
+	}
+
+	select,
+	input {
 		font: inherit;
+		min-width: 0;
 		padding: 0.4em 0.6em;
 		background: var(--color-field);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
-		color: inherit;
+		color: var(--color-ink);
+		&:focus,
+		&:hover {
+			background: var(--color-field-focus);
+		}
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.field-error {
+		color: var(--color-danger);
+		font-size: var(--size-meta);
 	}
 
 	.link {
