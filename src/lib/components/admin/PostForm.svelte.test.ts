@@ -16,6 +16,10 @@ function stubFetchOk(payload: unknown = {}) {
 	return mock;
 }
 
+async function choose(container: HTMLElement, value: string) {
+	await fireEvent.change(container.querySelector('select') as HTMLSelectElement, { target: { value } });
+}
+
 describe('PostForm', () => {
 	it('blocks submit and surfaces an error when body is empty', async () => {
 		const fetchMock = stubFetchOk();
@@ -246,5 +250,34 @@ describe('PostForm', () => {
 		await fireEvent.click(getByRole('button', { name: 'Save' }));
 		const alert = await findByRole('alert');
 		expect(alert.textContent).toContain('Not found');
+	});
+
+	it('create mode: sends the chosen existing place', async () => {
+		const fetchMock = stubFetchOk({ ok: true, slug: 'here' });
+		const places = [{ id: 7, name: 'Home', slug: 'home', latitude: 1, longitude: 2, count: 1 }];
+		const { container, getByRole } = render(PostForm, { props: { mode: 'create', places } });
+		await fireEvent.input(container.querySelector('textarea') as HTMLTextAreaElement, {
+			target: { value: 'A post.' }
+		});
+		await choose(container, '7');
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+		expect(body.place).toEqual({ id: 7 });
+	});
+
+	it('edit mode: clearing the place sends null', async () => {
+		const fetchMock = stubFetchOk({ ok: true });
+		const places = [{ id: 7, name: 'Home', slug: 'home', latitude: 1, longitude: 2, count: 1 }];
+		const { container, getByRole } = render(PostForm, {
+			props: {
+				mode: 'edit',
+				places,
+				initial: { slug: 'existing', body: 'b', place: { name: 'Home', slug: 'home' } }
+			}
+		});
+		await choose(container, '');
+		await fireEvent.click(getByRole('button', { name: 'Save' }));
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+		expect(body.place).toBeNull();
 	});
 });
