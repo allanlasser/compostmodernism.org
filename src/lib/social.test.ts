@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { postSocialMeta, siteSocialMeta, tagSocialMeta } from './social';
+import { postSocialMeta, siteSocialMeta, tagSocialMeta, placeSocialMeta } from './social';
 import type { Post } from './types';
 
 const SITE = 'https://compostmodernism.org';
@@ -96,6 +96,18 @@ describe('tagSocialMeta', () => {
 			documentTitle: '#food · compostmodernism',
 			description: 'Posts tagged food on compostmodernism, a blog by Allan Lasser.',
 			url: 'https://compostmodernism.org/tag/food'
+		});
+	});
+});
+
+describe('placeSocialMeta', () => {
+	it('titles the page after the place', () => {
+		expect(placeSocialMeta(`${SITE}/`, { name: 'Lisbon, Portugal', slug: 'lisbon-portugal' })).toEqual({
+			type: 'website',
+			title: 'Lisbon, Portugal',
+			documentTitle: 'Lisbon, Portugal · compostmodernism',
+			description: 'Posts written in Lisbon, Portugal on compostmodernism, a blog by Allan Lasser.',
+			url: 'https://compostmodernism.org/place/lisbon-portugal'
 		});
 	});
 });

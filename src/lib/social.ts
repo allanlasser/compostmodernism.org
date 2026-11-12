@@ -120,3 +120,13 @@ export function tagSocialMeta(siteUrl: string, tag: string): SocialMeta {
 		url: `${origin(siteUrl)}/tag/${tag}`
 	};
 }
+
+export function placeSocialMeta(siteUrl: string, place: { name: string; slug: string }): SocialMeta {
+	return {
+		type: 'website',
+		title: place.name,
+		documentTitle: `${place.name} · ${SITE_NAME}`,
+		description: `Posts written in ${place.name} on ${SITE_NAME}, a blog by Allan Lasser.`,
+		url: `${origin(siteUrl)}/place/${place.slug}`
+	};
+}
