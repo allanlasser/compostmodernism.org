@@ -1605,6 +1605,68 @@ backlog) are only reachable by permalink. Load them as the reader scrolls.
 
 ---
 
+## Phase 22 — Places
+
+Every journal entry gets written somewhere. Attach a place to a post: a name,
+plus the latitude and longitude it was written at. A place is its own row, so
+one place collects many posts and gets its own page, like a tag.
+
+### Design decisions (locked before coding)
+
+- **Separate `places` table** (`id`, `name`, `slug`, `latitude`, `longitude`,
+  `created_at`), linked by a nullable `posts.place_id` (`ON DELETE SET NULL`).
+  One place per post; zero is fine.
+- **Pick or create, never auto-merge by distance.** The admin form lists known
+  places, nearest first once the browser has located you. You choose one or
+  create a new one. Creating a place whose name slugifies to an existing place's
+  slug reuses that place (same rule as tags), so a Shortcut sending "Home" twice
+  doesn't make `home-2`.
+- **Coordinates are private.** Public post data carries only `{ name, slug }`.
+  Latitude and longitude appear only in the admin loaders and the private
+  nightly archive. Nothing public, not even page data, includes them.
+- **Public surface:** the place name sits in the post rail under the dateline
+  and links to `/place/[slug]`, a feed of that place's published posts (mirrors
+  `/tag/[slug]`). Unknown slug → 404.
+- **Naming:** after `navigator.geolocation` fixes a position, the admin form asks
+  OpenStreetMap Nominatim (`/reverse`, no key, called from the browser) for a
+  suggested name ("Locality, State" in the US, "Locality, Country" elsewhere). The
+  suggestion is editable and a failed lookup just leaves the field blank.
+- **Pre-selection:** after locating, the nearest known place within 500 m is
+  pre-selected; otherwise "New place" is selected with the suggested name.
+- **API:** `POST`/`PATCH /api/post` accept `place`: `{ id }` to reuse,
+  `{ name, latitude, longitude }` to create-or-reuse-by-name, or `null` (PATCH)
+  to clear. An unknown `id` → 400.
+- **Out of scope:** renaming/merging/deleting places in the admin, maps, RSS.
+
+### Red → Green cycles
+
+```
+22.1  migrate: 005 creates places and posts.place_id; existing posts have no place
+22.2  db: insertPost with a new place creates it and hydrates { name, slug } with no coordinates
+22.3  db: insertPost with { id } links an existing place
+22.4  db: a new place whose name matches an existing slug reuses that place
+22.5  db: updatePost keeps the place when omitted, clears on null, sets on new input
+22.6  db: getPostsByPlace returns published posts, null for an unknown slug
+22.7  db: getPlaces lists places with coordinates and post counts
+22.8  schema: place accepts { id } / { name, latitude, longitude } / null; rejects out-of-range coordinates
+22.9  api: POST and PATCH pass place through; unknown place id → 400
+22.10 geo: distanceKm (haversine); placeNameFromNominatim formats US and non-US addresses
+22.11 FeedItem: renders the place as a link to /place/[slug]
+22.12 /place/[slug]: loader 404s on unknown slug; page renders the place name and its posts
+22.13 PostForm: shows the current place; "Use my location" sorts places by distance,
+      pre-selects one within 500 m, else suggests a name; submit sends place
+22.14 export: frontmatter includes place name and coordinates
+```
+
+### Checkpoint 22
+
+- [ ] `npm test` and `npm run check` green
+- [ ] Manual browser pass: locate, create a place, reuse it on a second post, clear it
+- [ ] Place page lists only published posts; page source contains no coordinates
+- [ ] README (API table, layout), SPEC updated
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

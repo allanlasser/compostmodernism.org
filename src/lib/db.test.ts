@@ -971,3 +971,84 @@ describe('draft visibility', () => {
 		expect(db.getPostCadence()).toEqual([{ date: '2024-01-05', count: 1 }]);
 	});
 });
+
+describe('places', () => {
+	const kitchen = { name: 'Cambridge, Massachusetts', latitude: 42.3736, longitude: -71.1097 };
+
+	it('adds a places table and a nullable posts.place_id', () => {
+		const cols = db.raw.prepare("PRAGMA table_info('posts')").all() as { name: string }[];
+		expect(cols.map((c) => c.name)).toContain('place_id');
+		db.insertPost({ body: 'no place' });
+		expect(db.getPosts()[0].place).toBeNull();
+	});
+
+	it('insertPost with a new place creates it and hydrates name and slug only', () => {
+		const { slug } = db.insertPost({ body: 'hi', place: kitchen });
+		const post = db.getPostBySlug(slug)!;
+		expect(post.place).toEqual({ name: 'Cambridge, Massachusetts', slug: 'cambridge-massachusetts' });
+	});
+
+	it('insertPost with { id } links an existing place', () => {
+		db.insertPost({ body: 'one', place: kitchen });
+		const [place] = db.getPlaces();
+		const { slug } = db.insertPost({ body: 'two', place: { id: place.id } });
+		expect(db.getPostBySlug(slug)!.place?.slug).toBe('cambridge-massachusetts');
+		expect(db.getPlaces()).toHaveLength(1);
+	});
+
+	it('a new place whose name matches an existing slug reuses that place', () => {
+		db.insertPost({ body: 'one', place: { name: 'Home', latitude: 1, longitude: 1 } });
+		db.insertPost({ body: 'two', place: { name: 'home ', latitude: 2, longitude: 2 } });
+		const places = db.getPlaces();
+		expect(places).toHaveLength(1);
+		expect(places[0]).toMatchObject({ name: 'Home', latitude: 1, longitude: 1, count: 2 });
+	});
+
+	it('updatePost keeps the place when omitted, clears on null, sets on new input', () => {
+		const { slug } = db.insertPost({ body: 'hi', place: kitchen });
+		db.updatePost(slug, { body: 'edited' });
+		expect(db.getPostBySlug(slug)!.place?.name).toBe('Cambridge, Massachusetts');
+
+		db.updatePost(slug, { body: 'edited', place: null });
+		expect(db.getPostBySlug(slug)!.place).toBeNull();
+
+		db.updatePost(slug, { body: 'edited', place: { name: 'Lisbon, Portugal', latitude: 38.7, longitude: -9.1 } });
+		expect(db.getPostBySlug(slug)!.place?.slug).toBe('lisbon-portugal');
+	});
+
+	it('getPostsByPlace returns published posts newest first, null for an unknown slug', () => {
+		db.insertPost({ body: 'old', place: kitchen, created_at: 1000 });
+		db.insertPost({ body: 'new', place: kitchen, created_at: 2000 });
+		db.insertPost({ body: 'hidden', place: kitchen, created_at: 3000, draft: 1 });
+		db.insertPost({ body: 'elsewhere', created_at: 4000 });
+		const posts = db.getPostsByPlace('cambridge-massachusetts')!;
+		expect(posts.map((p) => p.body)).toEqual(['new', 'old']);
+		expect(db.getPostsByPlace('atlantis')).toBeNull();
+	});
+
+	it('getPlaceBySlug returns the public name and slug', () => {
+		db.insertPost({ body: 'hi', place: kitchen });
+		expect(db.getPlaceBySlug('cambridge-massachusetts')).toEqual({
+			name: 'Cambridge, Massachusetts',
+			slug: 'cambridge-massachusetts'
+		});
+		expect(db.getPlaceBySlug('atlantis')).toBeNull();
+	});
+
+	it('getPlaces lists places with coordinates and post counts, most recently used first', () => {
+		db.insertPost({ body: 'a', place: kitchen, created_at: 1000 });
+		db.insertPost({ body: 'b', place: { name: 'Lisbon', latitude: 38.7, longitude: -9.1 }, created_at: 2000 });
+		db.insertPost({ body: 'c', place: { name: 'Lisbon', latitude: 0, longitude: 0 }, created_at: 3000 });
+		expect(db.getPlaces()).toEqual([
+			expect.objectContaining({ name: 'Lisbon', slug: 'lisbon', latitude: 38.7, longitude: -9.1, count: 2 }),
+			expect.objectContaining({ name: 'Cambridge, Massachusetts', latitude: 42.3736, longitude: -71.1097, count: 1 })
+		]);
+	});
+
+	it('getPlaceById returns the place or null', () => {
+		db.insertPost({ body: 'a', place: kitchen });
+		const [place] = db.getPlaces();
+		expect(db.getPlaceById(place.id)?.name).toBe('Cambridge, Massachusetts');
+		expect(db.getPlaceById(999)).toBeNull();
+	});
+});
