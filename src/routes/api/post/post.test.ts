@@ -2,14 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('$lib/db', () => ({
 	insertPost: vi.fn(),
-	slugTaken: vi.fn()
+	slugTaken: vi.fn(),
+	getPlaceById: vi.fn()
 }));
 vi.mock('$env/dynamic/private', () => ({
 	env: { POST_SECRET: 'test-secret' }
 }));
 
 import { POST } from './+server';
-import { insertPost, slugTaken } from '$lib/db';
+import { insertPost, slugTaken, getPlaceById } from '$lib/db';
 
 const mockInsert = vi.mocked(insertPost);
 const mockSlugTaken = vi.mocked(slugTaken);
@@ -144,5 +145,23 @@ describe('POST /api/post', () => {
 			url: null,
 			tags: ['a']
 		});
+	});
+
+	it('201 forwards a place to insertPost', async () => {
+		const place = { name: 'Lisbon, Portugal', latitude: 38.72, longitude: -9.14 };
+		const res = await POST({
+			request: req({ body: 'b', place }, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(201);
+		expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ place }));
+	});
+
+	it('400 when place id does not exist', async () => {
+		vi.mocked(getPlaceById).mockReturnValue(null);
+		const res = await POST({
+			request: req({ body: 'b', place: { id: 42 } }, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(400);
+		expect(mockInsert).not.toHaveBeenCalled();
 	});
 });

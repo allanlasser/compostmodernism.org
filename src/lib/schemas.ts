@@ -14,6 +14,19 @@ const slugSchema = z
 	.string()
 	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase letters, digits, and hyphens');
 
+export const placeInputSchema = z.union([
+	z.object({ id: z.number().int().positive() }).strict(),
+	z
+		.object({
+			name: z.string().trim().min(1, 'place name is required'),
+			latitude: z.number().min(-90).max(90),
+			longitude: z.number().min(-180).max(180)
+		})
+		.strict()
+]);
+
+export type PlaceInputParsed = z.infer<typeof placeInputSchema>;
+
 export const postInputSchema = z.object({
 	body: z.string().trim().min(1, 'body is required'),
 	title: emptyToNull,
@@ -25,7 +38,8 @@ export const postInputSchema = z.object({
 		.default([])
 		.transform((arr) => arr.filter(isNonEmptyString).map((s) => s.trim())),
 	created_at: z.number().int().positive().optional(),
-	draft: z.union([z.literal(0), z.literal(1)]).optional()
+	draft: z.union([z.literal(0), z.literal(1)]).optional(),
+	place: placeInputSchema.optional()
 });
 
 export type PostInputInput = z.input<typeof postInputSchema>;
@@ -38,7 +52,8 @@ export const postUpdateSchema = z.object({
 	tags: z.array(z.string().trim()).optional(),
 	slug: slugSchema.optional(),
 	created_at: z.number().int().positive().optional(),
-	draft: z.union([z.literal(0), z.literal(1)]).optional()
+	draft: z.union([z.literal(0), z.literal(1)]).optional(),
+	place: placeInputSchema.nullable().optional()
 });
 
 export type PostUpdateInput = z.input<typeof postUpdateSchema>;

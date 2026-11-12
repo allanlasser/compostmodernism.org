@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { getPostBySlug, updatePost, deletePost, slugTaken } from '$lib/db';
+import { getPostBySlug, updatePost, deletePost, slugTaken, getPlaceById } from '$lib/db';
 import { isAuthorized } from '$lib/auth';
 import { postUpdateSchema } from '$lib/schemas';
 
@@ -21,7 +21,7 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
 	}
 
-	const { body, title, url, tags, slug: newSlug, created_at, draft } = parsed.data;
+	const { body, title, url, tags, slug: newSlug, created_at, draft, place } = parsed.data;
 
 	if (url && !title) {
 		return json({ error: 'title is required when url is provided' }, { status: 400 });
@@ -34,6 +34,10 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
+	if (place && 'id' in place && !getPlaceById(place.id)) {
+		return json({ error: `place ${place.id} does not exist` }, { status: 400 });
+	}
+
 	updatePost(slug, {
 		body: body ?? post.body,
 		title: title !== undefined ? title : post.title,
@@ -41,7 +45,8 @@ export const PATCH: RequestHandler = async (event) => {
 		tags,
 		slug: newSlug,
 		created_at,
-		draft
+		draft,
+		place
 	});
 	return json({ ok: true, slug: newSlug ?? slug });
 };
