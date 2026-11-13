@@ -111,7 +111,9 @@ This file is the architectural overview — what the running app actually is.
    `posts.db` plus a `posts/YYYY/MM/DD/slug.md` tree (YAML frontmatter per
    post) into a single `archive/YYYY-MM-DD.zip` on the bind mount, then
    `PutObject`s the same zip to R2 under `backups/YYYY-MM-DD.zip`. The two
-   surfaces are independent — either alone is a complete restore source.
+   surfaces are independent — either alone is a complete restore source. After
+   the R2 upload succeeds it `GET`s `BACKUP_HEARTBEAT_URL` (and `<url>/fail` if the
+   job throws), so an external monitor alerts when a night's ping doesn't arrive.
 
 ### Post types
 

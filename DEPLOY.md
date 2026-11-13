@@ -55,7 +55,8 @@ nano .env
 ```
 
 Fill in `POST_SECRET`, `ADMIN_PASSWORD`, and all four `R2_*` values
-(same values as your local `.env`).
+(same values as your local `.env`). `BACKUP_HEARTBEAT_URL` can stay blank until
+the backup monitor exists; see "After everything works".
 
 ## 5. Mount the Caddyfile in the gateway (one-time)
 
@@ -210,4 +211,21 @@ If it goes wrong, restore `posts.db` from the zip taken in step 3.
   (The `mkdir` is a shell command; only the `0 3 * * *` line goes in the crontab.)
   Then run the job once by hand and confirm `archive/YYYY-MM-DD.zip` exists and
   R2 has `backups/YYYY-MM-DD.zip`.
+- Add the backup dead-man's-switch. A cron that stops, a renamed container, or
+  rotated R2 credentials all fail silently; an external monitor that expects a
+  ping turns that silence into an alert.
+  1. Create a check at [healthchecks.io](https://healthchecks.io) (any monitor
+     that accepts a plain `GET` works, but only healthchecks.io-style services
+     also serve a `<url>/fail` endpoint) with a 24 hour period and a grace time of
+     about an hour, so the 03:00 cron is late before it is missing. Point its
+     notifications at an inbox you read.
+  2. Put the check's ping URL in `.env` as `BACKUP_HEARTBEAT_URL=...`, then
+     `docker compose up -d` to recreate the container (`restart` does not reread
+     `env_file`).
+  3. Run the job by hand. The log should end with the R2 mirror line and no
+     `Heartbeat` warning, and the check should show a ping.
+  The script pings only after the R2 upload succeeds. A thrown error pings
+  `/fail` so it alerts immediately, and a skipped mirror (missing `R2_*`) sends
+  nothing, so the monitor goes late. A failing ping is logged but never fails the
+  backup.
 - Set a Cloudflare R2 lifecycle rule expiring `backups/` after 90 days.

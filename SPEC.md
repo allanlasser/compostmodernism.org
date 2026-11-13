@@ -1203,6 +1203,7 @@ R2_SECRET_ACCESS_KEY=
 R2_BUCKET=compostmodernism
 R2_PUBLIC_URL=https://static.compostmodernism.org
 SITE_URL=https://compostmodernism.org
+BACKUP_HEARTBEAT_URL=
 ```
 
 Generate secrets:
@@ -1497,6 +1498,14 @@ helpers are exported and unit-tested in `export-and-backup.test.ts`:
   uploading to R2) live in `main()`.
 - `uploadBackup(r2, bucket, body, key)` — `PutObjectCommand` with
   `ContentType: application/zip`.
+- `pingHeartbeat(url, suffix?)` — `GET`s `BACKUP_HEARTBEAT_URL` (plus `/fail`
+  for the failure signal) with a 10s timeout. Never throws: an unset URL, a
+  network error, or a non-2xx response is a warning, because a monitor outage
+  must not fail the backup.
+- `runWithHeartbeat(job, url)` — wraps `main()`. Pings success only after
+  `main()` resolves `true` (archive mirrored to R2); pings `/fail` and rethrows if
+  it throws. A skipped R2 mirror resolves `false` and sends nothing, so rotated or
+  removed credentials surface as a missed ping instead of a false success.
 
 The zip is built in memory with `adm-zip` (devDependency — only the
 script uses it). Sized for a small personal blog; if the archive ever
@@ -1512,6 +1521,10 @@ The cron job runs inside the container so it has access to `.env` variables:
 ```
 0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1
 ```
+
+The ping is a dead-man's-switch: the external monitor (healthchecks.io, 24h
+period, short grace) alerts on the *absence* of a ping, which also covers the
+cron never starting, the container being renamed, or the disk filling.
 
 R2 backups accumulate daily. Set a **lifecycle rule** in the Cloudflare dashboard to
 expire objects under the `backups/` prefix after 90 days.

@@ -1605,6 +1605,54 @@ backlog) are only reachable by permalink. Load them as the reader scrolls.
 
 ---
 
+## Phase 23 — Nightly Backup Heartbeat
+
+The nightly backup (#13) went months without running and nothing said so (issue
+#19). Fixing the cause doesn't stop the next silent break, so the job now reports
+in to an external monitor, and the monitor alerts when a report doesn't arrive.
+
+### Design decisions (locked before coding)
+
+- **Dead-man's-switch.** Success pings `BACKUP_HEARTBEAT_URL`; absence is the
+  alarm, so it covers the case where the script never starts.
+- **Ping only after the R2 upload succeeds**, not after the local zip. A skipped
+  mirror (missing `R2_*`) sends nothing, otherwise rotated credentials would look
+  healthy.
+- **A throw pings `<url>/fail`** so real errors alert immediately instead of at the
+  end of the grace period. The original error is rethrown and the exit code stays 1.
+- **A failed ping never fails the backup.** Unset URL, network error, non-2xx, and
+  the 10s timeout are all warnings.
+- **Service-agnostic URL, healthchecks.io-shaped `/fail`.** The code only needs a
+  `GET`-able URL; `/fail` is the healthchecks.io convention. Choosing the service is
+  the owner's call (DEPLOY.md assumes healthchecks.io).
+- **Compose needs no change:** `env_file: .env` already injects the variable.
+
+### Red → Green cycles
+
+```
+23.1 pingHeartbeat GETs the URL
+23.2 pingHeartbeat appends the suffix and tolerates a trailing slash
+23.3 pingHeartbeat with no URL warns (names BACKUP_HEARTBEAT_URL)
+23.4 pingHeartbeat resolves with a warning when fetch rejects
+23.5 pingHeartbeat resolves with a warning on a non-2xx response
+23.6 runWithHeartbeat pings once, after the job has finished
+23.7 runWithHeartbeat pings /fail and rethrows when the job throws
+23.8 runWithHeartbeat warns and sends nothing when the mirror was skipped
+23.9 runWithHeartbeat completes when the ping itself fails
+```
+
+### Checkpoint 23
+
+- [x] `npm test` and `npm run check` green
+- [x] Run against a local HTTP listener: failing upload hits `/fail`, skipped
+      mirror sends nothing, exit codes unchanged
+- [ ] After deploy: monitor created, `BACKUP_HEARTBEAT_URL` set in prod `.env`,
+      container recreated, job run by hand and the check shows a ping
+- [ ] Alert path proven once: pause the check or break a credential and confirm the
+      notification arrives
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

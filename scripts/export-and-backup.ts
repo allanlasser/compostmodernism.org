@@ -71,7 +71,44 @@ export async function uploadBackup(
 	await r2.send(new PutObjectCommand(input));
 }
 
-async function main(): Promise<void> {
+const HEARTBEAT_TIMEOUT_MS = 10_000;
+
+// A monitor outage must never fail the backup, so every problem here is a warning.
+export async function pingHeartbeat(url: string | undefined, suffix = ''): Promise<void> {
+	if (!url) {
+		console.warn('Skipping heartbeat — missing env: BACKUP_HEARTBEAT_URL');
+		return;
+	}
+	const target = `${url.replace(/\/+$/, '')}${suffix}`;
+	try {
+		const res = await fetch(target, { signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS) });
+		if (!res.ok) console.warn(`Heartbeat ping returned ${res.status}`);
+	} catch (err) {
+		console.warn(`Heartbeat ping failed: ${err instanceof Error ? err.message : err}`);
+	}
+}
+
+// `job` resolves true only when the archive was also mirrored to R2. A skipped mirror
+// sends no signal, so the monitor's missed-ping alert covers removed or rotated credentials.
+export async function runWithHeartbeat(
+	job: () => Promise<boolean>,
+	heartbeatUrl: string | undefined
+): Promise<void> {
+	let mirrored: boolean;
+	try {
+		mirrored = await job();
+	} catch (err) {
+		await pingHeartbeat(heartbeatUrl, '/fail');
+		throw err;
+	}
+	if (!mirrored) {
+		console.warn('Skipping heartbeat — archive was not mirrored to R2');
+		return;
+	}
+	await pingHeartbeat(heartbeatUrl);
+}
+
+async function main(): Promise<boolean> {
 	const dbPath = join(process.cwd(), 'posts.db');
 	const db = createDb(dbPath);
 	const posts = db.getPosts({ limit: 1_000_000 });
@@ -91,7 +128,7 @@ async function main(): Promise<void> {
 	const missing = required.filter((k) => !process.env[k]);
 	if (missing.length) {
 		console.warn(`Skipping R2 mirror — missing env: ${missing.join(', ')}`);
-		return;
+		return false;
 	}
 
 	const r2 = new S3Client({
@@ -106,10 +143,11 @@ async function main(): Promise<void> {
 	const key = r2Key(now);
 	await uploadBackup(r2, process.env.R2_BUCKET!, zipBuffer, key);
 	console.log(`Mirrored archive to R2: ${key}`);
+	return true;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-	main().catch((err) => {
+	runWithHeartbeat(main, process.env.BACKUP_HEARTBEAT_URL).catch((err) => {
 		console.error(err);
 		process.exit(1);
 	});
