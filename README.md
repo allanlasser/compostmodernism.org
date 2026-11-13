@@ -25,6 +25,7 @@ This file is the architectural overview — what the running app actually is.
 | RSS | `feed` — full-text RSS 2.0 at `/feeds/posts.xml` |
 | Validation | `zod` `safeParse` on every API route |
 | Tests | `vitest` + `@testing-library/svelte` + `happy-dom`, 150+ tests across the codebase |
+| Runtime | Node 22 (`node:22-alpine` in both Docker stages; CI uses the same major) |
 | Container | Docker + Docker Compose (no host ports — joins external `web` network) |
 | TLS / routing | Caddy, running in a separate gateway container; this repo only ships a `Caddyfile` that the gateway mounts |
 | CI/CD | GitHub Actions: build + test gate, then plain `ssh` runs `scripts/deploy.sh` on the VPS |

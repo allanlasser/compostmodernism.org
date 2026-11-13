@@ -1605,7 +1605,37 @@ backlog) are only reachable by permalink. Load them as the reader scrolls.
 
 ---
 
-## Phase 22 — Places
+## Phase 22 — Node 22 Base Image
+
+The AWS SDK drops Node 20 for releases after the first week of January 2027
+(issue #18). `@aws-sdk/client-s3` is `^3.0.0`, so the next clean `npm ci` after
+that date could resolve a release the image cannot run, breaking R2 uploads.
+
+### Design decisions (locked before coding)
+
+- **Node 22 in both Docker stages and in CI**, same major everywhere so the gate
+  tests what ships.
+- **No code change.** Nothing here is unit-testable; the red step is the SDK's
+  `NodeVersionSupportWarning` in the production backup log, and the green step is
+  its absence plus a working R2 upload.
+- **Actions bumped in the same pass:** `actions/checkout` and `actions/setup-node`
+  v4 → v7 (both run on node24), clearing the Actions runtime warning.
+- **Node 24 is the follow-up, not this change.** 22 satisfies the SDK and matches
+  local dev; 24 has the longer support window if we want to move again.
+
+### Checkpoint 22
+
+- [x] `npm test` and `npm run check` green on Node 22
+- [ ] PR CI green (exercises the bumped actions and `node-version: 22`)
+- [ ] After deploy: `docker exec compostmodernism node --version` prints v22, and
+      `docker exec compostmodernism npx tsx scripts/export-and-backup.ts` writes the
+      zip and mirrors it to R2 with no `NodeVersionSupportWarning`
+- [ ] Site loads and an image upload still works (`sharp` and `better-sqlite3` are
+      rebuilt on the new base)
+
+---
+
+## Phase 23 — Places
 
 Every journal entry gets written somewhere. Each post can store where: a place
 name plus the latitude and longitude it was written at. Posts with the same place
@@ -1640,24 +1670,24 @@ name share a page, like a tag.
 ### Red → Green cycles
 
 ```
-22.1  migrate: 005 adds latitude, longitude, place_name, place_slug to posts; existing posts have no place
-22.2  db: insertPost with a place stores it; hydrated posts expose { name, slug } and no coordinates
-22.3  db: getPostLocation returns name, slug, and coordinates for one post (null without a place)
-22.4  db: updatePost keeps the place when omitted, clears on null, replaces on new input
-22.5  db: getPostsByPlace / getPlaceBySlug group by slug, published only, null when empty
-22.6  db: getPlaceNames lists one entry per slug (latest name, average coordinates, count)
-22.7  schema: place needs a name; latitude/longitude in range and both-or-neither; null on update
-22.8  api: POST and PATCH pass place through
-22.9  geo: distanceKm (haversine); placeNameFromNominatim formats US and non-US addresses
-22.10 FeedItem: renders the place as a link to /place/[slug]
-22.11 /place/[slug]: loader 404s on unknown slug; page renders the place name and its posts
-22.12 PlaceField: locating near a known place fills its name; far away fills the
+23.1  migrate: 005 adds latitude, longitude, place_name, place_slug to posts; existing posts have no place
+23.2  db: insertPost with a place stores it; hydrated posts expose { name, slug } and no coordinates
+23.3  db: getPostLocation returns name, slug, and coordinates for one post (null without a place)
+23.4  db: updatePost keeps the place when omitted, clears on null, replaces on new input
+23.5  db: getPostsByPlace / getPlaceBySlug group by slug, published only, null when empty
+23.6  db: getPlaceNames lists one entry per slug (latest name, average coordinates, count)
+23.7  schema: place needs a name; latitude/longitude in range and both-or-neither; null on update
+23.8  api: POST and PATCH pass place through
+23.9  geo: distanceKm (haversine); placeNameFromNominatim formats US and non-US addresses
+23.10 FeedItem: renders the place as a link to /place/[slug]
+23.11 /place/[slug]: loader 404s on unknown slug; page renders the place name and its posts
+23.12 PlaceField: locating near a known place fills its name; far away fills the
       OpenStreetMap suggestion; datalist lists known names; typed name without location
-22.13 PostForm: sends place on create; clearing on edit sends null
-22.14 export: frontmatter includes place name and coordinates
+23.13 PostForm: sends place on create; clearing on edit sends null
+23.14 export: frontmatter includes place name and coordinates
 ```
 
-### Checkpoint 22
+### Checkpoint 23
 
 - [x] `npm test` (496) and `npm run check` green
 - [x] Manual browser pass (Playwright, geolocation emulated, Nominatim stubbed):
