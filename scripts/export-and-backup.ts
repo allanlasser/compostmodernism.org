@@ -74,14 +74,18 @@ export async function uploadBackup(
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 
 // A monitor outage must never fail the backup, so every problem here is a warning.
-export async function pingHeartbeat(url: string | undefined, suffix = ''): Promise<void> {
+export async function pingHeartbeat(
+	url: string | undefined,
+	status: 'ok' | 'error'
+): Promise<void> {
 	if (!url) {
 		console.warn('Skipping heartbeat — missing env: BACKUP_HEARTBEAT_URL');
 		return;
 	}
-	const target = `${url.replace(/\/+$/, '')}${suffix}`;
 	try {
-		const res = await fetch(target, { signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS) });
+		const target = new URL(url);
+		target.searchParams.set('status', status);
+		const res = await fetch(target.toString(), { signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS) });
 		if (!res.ok) console.warn(`Heartbeat ping returned ${res.status}`);
 	} catch (err) {
 		console.warn(`Heartbeat ping failed: ${err instanceof Error ? err.message : err}`);
@@ -98,14 +102,14 @@ export async function runWithHeartbeat(
 	try {
 		mirrored = await job();
 	} catch (err) {
-		await pingHeartbeat(heartbeatUrl, '/fail');
+		await pingHeartbeat(heartbeatUrl, 'error');
 		throw err;
 	}
 	if (!mirrored) {
 		console.warn('Skipping heartbeat — archive was not mirrored to R2');
 		return;
 	}
-	await pingHeartbeat(heartbeatUrl);
+	await pingHeartbeat(heartbeatUrl, 'ok');
 }
 
 async function main(): Promise<boolean> {

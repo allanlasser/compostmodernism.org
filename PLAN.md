@@ -1618,25 +1618,27 @@ in to an external monitor, and the monitor alerts when a report doesn't arrive.
 - **Ping only after the R2 upload succeeds**, not after the local zip. A skipped
   mirror (missing `R2_*`) sends nothing, otherwise rotated credentials would look
   healthy.
-- **A throw pings `<url>/fail`** so real errors alert immediately instead of at the
+- **A throw sends `status=error`** so real errors alert immediately instead of at the
   end of the grace period. The original error is rethrown and the exit code stays 1.
 - **A failed ping never fails the backup.** Unset URL, network error, non-2xx, and
   the 10s timeout are all warnings.
-- **Service-agnostic URL, healthchecks.io-shaped `/fail`.** The code only needs a
-  `GET`-able URL; `/fail` is the healthchecks.io convention. Choosing the service is
-  the owner's call (DEPLOY.md assumes healthchecks.io).
+- **Sentry Cron monitors.** `BACKUP_HEARTBEAT_URL` is the monitor's HTTP check-in
+  URL (`.../api/<project>/cron/<slug>/<public-key>/`); the script adds
+  `?status=ok|error` with a plain `GET`. No `in_progress` check-in or `check_in_id`:
+  Sentry flags a missed day from the absent `ok`, which is all we need. The monitor
+  is created in the Sentry UI, not upserted from the script.
 - **Compose needs no change:** `env_file: .env` already injects the variable.
 
 ### Red → Green cycles
 
 ```
-23.1 pingHeartbeat GETs the URL
-23.2 pingHeartbeat appends the suffix and tolerates a trailing slash
+23.1 pingHeartbeat GETs the check-in URL with status=ok
+23.2 pingHeartbeat reports status=error, and keeps query params already on the URL
 23.3 pingHeartbeat with no URL warns (names BACKUP_HEARTBEAT_URL)
-23.4 pingHeartbeat resolves with a warning when fetch rejects
+23.4 pingHeartbeat resolves with a warning when the URL is malformed or fetch rejects
 23.5 pingHeartbeat resolves with a warning on a non-2xx response
-23.6 runWithHeartbeat pings once, after the job has finished
-23.7 runWithHeartbeat pings /fail and rethrows when the job throws
+23.6 runWithHeartbeat reports ok once, after the job has finished
+23.7 runWithHeartbeat reports error and rethrows when the job throws
 23.8 runWithHeartbeat warns and sends nothing when the mirror was skipped
 23.9 runWithHeartbeat completes when the ping itself fails
 ```
@@ -1644,11 +1646,11 @@ in to an external monitor, and the monitor alerts when a report doesn't arrive.
 ### Checkpoint 23
 
 - [x] `npm test` and `npm run check` green
-- [x] Run against a local HTTP listener: failing upload hits `/fail`, skipped
+- [x] Run against a local HTTP listener: failing upload sends `status=error`, skipped
       mirror sends nothing, exit codes unchanged
-- [ ] After deploy: monitor created, `BACKUP_HEARTBEAT_URL` set in prod `.env`,
-      container recreated, job run by hand and the check shows a ping
-- [ ] Alert path proven once: pause the check or break a credential and confirm the
+- [ ] After deploy: Sentry Cron monitor created, `BACKUP_HEARTBEAT_URL` set in prod `.env`,
+      container recreated, job run by hand and the monitor shows an OK check-in
+- [ ] Alert path proven once: disable the job or break a credential and confirm the
       notification arrives
 
 ---

@@ -164,6 +164,8 @@ describe('uploadBackup', () => {
 	});
 });
 
+const checkIn = 'https://o1.ingest.sentry.io/api/2/cron/nightly-backup/publickey/';
+
 describe('pingHeartbeat', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
@@ -176,24 +178,39 @@ describe('pingHeartbeat', () => {
 		return fetchMock;
 	}
 
-	it('GETs the heartbeat URL', async () => {
+	it('GETs the check-in URL with status=ok', async () => {
 		const fetchMock = stubFetch();
-		await pingHeartbeat('https://hc-ping.com/abc');
-		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['https://hc-ping.com/abc']);
+		await pingHeartbeat(checkIn, 'ok');
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([`${checkIn}?status=ok`]);
 	});
 
-	it('appends the suffix, tolerating a trailing slash on the URL', async () => {
+	it('reports status=error', async () => {
 		const fetchMock = stubFetch();
-		await pingHeartbeat('https://hc-ping.com/abc/', '/fail');
-		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['https://hc-ping.com/abc/fail']);
+		await pingHeartbeat(checkIn, 'error');
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([`${checkIn}?status=error`]);
+	});
+
+	it('keeps query parameters already on the URL', async () => {
+		const fetchMock = stubFetch();
+		await pingHeartbeat(`${checkIn}?environment=prod`, 'ok');
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			`${checkIn}?environment=prod&status=ok`
+		]);
 	});
 
 	it('warns instead of pinging when the URL is unset', async () => {
 		const fetchMock = stubFetch();
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		await pingHeartbeat(undefined);
+		await pingHeartbeat(undefined, 'ok');
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining('BACKUP_HEARTBEAT_URL'));
 		expect(fetchMock.mock.calls).toEqual([]);
+	});
+
+	it('warns and resolves when the URL is malformed', async () => {
+		stubFetch();
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		await expect(pingHeartbeat('not a url', 'ok')).resolves.toBeUndefined();
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('Heartbeat ping failed'));
 	});
 
 	it('warns and resolves when the request rejects', async () => {
@@ -201,14 +218,14 @@ describe('pingHeartbeat', () => {
 			throw new Error('network down');
 		});
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		await expect(pingHeartbeat('https://hc-ping.com/abc')).resolves.toBeUndefined();
+		await expect(pingHeartbeat(checkIn, 'ok')).resolves.toBeUndefined();
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining('network down'));
 	});
 
 	it('warns and resolves on a non-2xx response', async () => {
 		stubFetch(async () => ({ ok: false, status: 404 }));
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		await expect(pingHeartbeat('https://hc-ping.com/abc')).resolves.toBeUndefined();
+		await expect(pingHeartbeat(checkIn, 'ok')).resolves.toBeUndefined();
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining('404'));
 	});
 });
@@ -219,9 +236,9 @@ describe('runWithHeartbeat', () => {
 		vi.restoreAllMocks();
 	});
 
-	const url = 'https://hc-ping.com/abc';
+	const url = checkIn;
 
-	it('pings once, only after the job has finished', async () => {
+	it('reports ok once, only after the job has finished', async () => {
 		const events: string[] = [];
 		vi.stubGlobal(
 			'fetch',
@@ -234,10 +251,10 @@ describe('runWithHeartbeat', () => {
 			events.push('job done');
 			return true;
 		}, url);
-		expect(events).toEqual(['job done', `ping ${url}`]);
+		expect(events).toEqual(['job done', `ping ${url}?status=ok`]);
 	});
 
-	it('pings /fail and rethrows when the job throws', async () => {
+	it('reports status=error and rethrows when the job throws', async () => {
 		const fetchMock = vi.fn(async () => ({ ok: true, status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 		await expect(
@@ -245,7 +262,7 @@ describe('runWithHeartbeat', () => {
 				throw new Error('upload failed');
 			}, url)
 		).rejects.toThrow('upload failed');
-		expect(fetchMock.mock.calls.map(([u]) => u)).toEqual([`${url}/fail`]);
+		expect(fetchMock.mock.calls.map(([u]) => u)).toEqual([`${url}?status=error`]);
 	});
 
 	it('does not report success when the R2 mirror was skipped', async () => {

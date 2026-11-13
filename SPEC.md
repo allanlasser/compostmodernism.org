@@ -1498,13 +1498,13 @@ helpers are exported and unit-tested in `export-and-backup.test.ts`:
   uploading to R2) live in `main()`.
 - `uploadBackup(r2, bucket, body, key)` — `PutObjectCommand` with
   `ContentType: application/zip`.
-- `pingHeartbeat(url, suffix?)` — `GET`s `BACKUP_HEARTBEAT_URL` (plus `/fail`
-  for the failure signal) with a 10s timeout. Never throws: an unset URL, a
-  network error, or a non-2xx response is a warning, because a monitor outage
-  must not fail the backup.
+- `pingHeartbeat(url, status)` — `GET`s the Sentry Cron monitor check-in URL in
+  `BACKUP_HEARTBEAT_URL` with `?status=ok|error` and a 10s timeout. Never throws:
+  an unset or malformed URL, a network error, or a non-2xx response is a warning,
+  because a monitor outage must not fail the backup.
 - `runWithHeartbeat(job, url)` — wraps `main()`. Pings success only after
-  `main()` resolves `true` (archive mirrored to R2); pings `/fail` and rethrows if
-  it throws. A skipped R2 mirror resolves `false` and sends nothing, so rotated or
+  `main()` resolves `true` (archive mirrored to R2); sends `status=error` and rethrows
+  if it throws. A skipped R2 mirror resolves `false` and sends nothing, so rotated or
   removed credentials surface as a missed ping instead of a false success.
 
 The zip is built in memory with `adm-zip` (devDependency — only the
@@ -1522,8 +1522,8 @@ The cron job runs inside the container so it has access to `.env` variables:
 0 3 * * * docker exec compostmodernism npx tsx scripts/export-and-backup.ts >> /var/log/compostmodernism-backup.log 2>&1
 ```
 
-The ping is a dead-man's-switch: the external monitor (healthchecks.io, 24h
-period, short grace) alerts on the *absence* of a ping, which also covers the
+The ping is a dead-man's-switch: the external monitor (a Sentry Cron monitor,
+daily schedule, short check-in margin) alerts on the *absence* of a ping, which also covers the
 cron never starting, the container being renamed, or the disk filling.
 
 R2 backups accumulate daily. Set a **lifecycle rule** in the Cloudflare dashboard to

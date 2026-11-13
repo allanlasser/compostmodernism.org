@@ -112,8 +112,9 @@ This file is the architectural overview — what the running app actually is.
    post) into a single `archive/YYYY-MM-DD.zip` on the bind mount, then
    `PutObject`s the same zip to R2 under `backups/YYYY-MM-DD.zip`. The two
    surfaces are independent — either alone is a complete restore source. After
-   the R2 upload succeeds it `GET`s `BACKUP_HEARTBEAT_URL` (and `<url>/fail` if the
-   job throws), so an external monitor alerts when a night's ping doesn't arrive.
+   the R2 upload succeeds it `GET`s the Sentry Cron monitor check-in URL in
+   `BACKUP_HEARTBEAT_URL` with `?status=ok` (`?status=error` if the job throws), so
+   Sentry alerts when a night's check-in doesn't arrive.
 
 ### Post types
 
