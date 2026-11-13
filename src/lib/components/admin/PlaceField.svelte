@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import NavigationIcon from '@lucide/svelte/icons/navigation';
+	import XIcon from '@lucide/svelte/icons/x';
+	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
 	import {
 		distanceKm,
 		nominatimReverseUrl,
@@ -90,9 +93,10 @@
 </script>
 
 <div class="place-field" id="place">
-	<label>
-		<span class="label">Place</span>
+	<label for="place-name" class="label">Place</label>
+	<div class="row">
 		<input
+			id="place-name"
 			type="text"
 			name="place"
 			list="place-names"
@@ -101,7 +105,21 @@
 			placeholder="Where are you?"
 			{disabled}
 		/>
-	</label>
+		<button
+			type="button"
+			class="button icon"
+			onclick={locate}
+			disabled={disabled || locating}
+			aria-label="Use my location"
+			title="Use my location"
+		>
+			{#if locating}
+				<LoaderCircleIcon size={16} class="spin" />
+			{:else}
+				<NavigationIcon size={16} />
+			{/if}
+		</button>
+	</div>
 	<datalist id="place-names">
 		{#each byDistance as place (place.slug)}
 			<option value={place.name}></option>
@@ -109,19 +127,23 @@
 	</datalist>
 
 	{#if here}
-		<span class="hint">
-			{here.latitude.toFixed(4)}, {here.longitude.toFixed(4)}
-			<button type="button" class="link" onclick={() => (here = null)} {disabled}>forget</button>
-			· names from
-			<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
-				>OpenStreetMap</a
+		<p class="coordinates">
+			<span>{here.latitude.toFixed(4)}, {here.longitude.toFixed(4)}</span>
+			<button
+				type="button"
+				class="clear"
+				onclick={() => (here = null)}
+				{disabled}
+				aria-label="Clear location"
+				title="Clear location"
 			>
-		</span>
+				<XIcon size={12} />
+			</button>
+			<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
+				>© OSM</a
+			>
+		</p>
 	{/if}
-
-	<button type="button" class="link" onclick={locate} disabled={disabled || locating}>
-		{locating ? 'Locating…' : 'Use my location'}
-	</button>
 
 	{#if locateError}<span class="field-error">{locateError}</span>{/if}
 	{#if error}<span class="field-error">{error}</span>{/if}
@@ -131,19 +153,18 @@
 	.place-field {
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
-		gap: 0.4em;
-	}
-
-	label {
-		display: flex;
-		flex-direction: column;
 		gap: 0.25em;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
 	}
 
+	.row {
+		display: flex;
+		gap: 0.4em;
+	}
+
 	input {
+		flex: 1 1 auto;
 		font: inherit;
 		min-width: 0;
 		padding: 0.4em 0.6em;
@@ -157,39 +178,56 @@
 		}
 	}
 
-	.link {
-		align-self: flex-start;
-		font: inherit;
+	.button.icon {
+		flex: 0 0 auto;
+		min-width: unset;
+		color: var(--color-ink-soft);
+		&:hover:not(:disabled) {
+			color: var(--color-ink);
+		}
+	}
+
+	.button.icon :global(.spin) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.coordinates {
+		display: flex;
+		align-items: center;
+		gap: 0.35em;
+		margin: 0;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 0.75em;
+	}
+
+	.clear {
+		display: inline-flex;
+		padding: 0.1em;
 		background: transparent;
 		border: 0;
-		padding: 0;
-		cursor: pointer;
-		color: var(--color-ink-soft);
-		font-size: var(--size-meta);
-	}
-
-	.link:hover:not(:disabled) {
-		color: var(--color-ink);
-		text-decoration: underline;
-	}
-
-	.hint {
-		font-style: italic;
-		font-size: var(--size-meta);
-		color: var(--color-ink-soft);
-	}
-
-	.hint .link {
-		font-style: italic;
-		text-decoration: underline;
-	}
-
-	.hint a {
+		border-radius: 3px;
 		color: inherit;
+		cursor: pointer;
+		&:hover:not(:disabled) {
+			color: var(--color-ink);
+			background: var(--color-surface-subtle);
+		}
+	}
+
+	.coordinates a {
+		margin-left: auto;
+		color: inherit;
+		font-family: var(--font-serif);
+		font-style: italic;
 	}
 
 	.field-error {
 		color: var(--color-danger);
-		font-size: var(--size-meta);
 	}
 </style>

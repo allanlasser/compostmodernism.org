@@ -278,4 +278,19 @@ describe('PostForm', () => {
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
 		expect(body.place).toBeNull();
 	});
+
+	it('edit mode: clearing the coordinates keeps the place name', async () => {
+		const fetchMock = stubFetchOk({ ok: true });
+		const { getByRole } = render(PostForm, {
+			props: {
+				mode: 'edit',
+				initial: { slug: 'existing', body: 'b' },
+				location: { name: 'Home', slug: 'home', latitude: 1, longitude: 2 }
+			}
+		});
+		await fireEvent.click(getByRole('button', { name: 'Clear location' }));
+		await fireEvent.click(getByRole('button', { name: 'Save' }));
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+		expect(body.place).toEqual({ name: 'Home' });
+	});
 });
