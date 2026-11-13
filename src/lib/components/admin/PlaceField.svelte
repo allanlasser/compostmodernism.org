@@ -7,13 +7,13 @@
 		type Coordinates
 	} from '$lib/geo';
 	import type { PlaceInputParsed } from '$lib/schemas';
-	import type { AdminPlace } from '$lib/types';
+	import type { KnownPlace, PlaceLocation } from '$lib/types';
 
 	const NEARBY_KM = 0.5;
 
 	interface Props {
-		places?: AdminPlace[];
-		initialSlug?: string | null;
+		places?: KnownPlace[];
+		initial?: PlaceLocation | null;
 		value?: PlaceInputParsed | null;
 		disabled?: boolean;
 		error?: string;
@@ -21,50 +21,47 @@
 
 	let {
 		places = [],
-		initialSlug = null,
+		initial = null,
 		value = $bindable(null),
 		disabled = false,
 		error
 	}: Props = $props();
 
-	const initialId = untrack(() => places.find((p) => p.slug === initialSlug)?.id);
-	let choice = $state(initialId ? String(initialId) : '');
-	let newName = $state('');
-	let here = $state<Coordinates | null>(null);
+	let name = $state(untrack(() => initial?.name ?? ''));
+	let here = $state<Coordinates | null>(
+		untrack(() =>
+			initial?.latitude != null && initial?.longitude != null
+				? { latitude: initial.latitude, longitude: initial.longitude }
+				: null
+		)
+	);
 	let locating = $state(false);
 	let locateError = $state('');
-	let suggested = false;
 
-	let options = $derived.by(() => {
+	function located(p: KnownPlace): p is KnownPlace & Coordinates {
+		return p.latitude !== null && p.longitude !== null;
+	}
+
+	let byDistance = $derived.by(() => {
 		const origin = here;
-		if (!origin) return places.map((p) => ({ place: p, label: p.name }));
-		return places
-			.map((p) => ({ place: p, km: distanceKm(origin, p) }))
-			.sort((a, b) => a.km - b.km)
-			.map(({ place, km }) => ({ place, label: `${place.name} · ${km.toFixed(1)} km` }));
+		if (!origin) return places;
+		const km = (p: KnownPlace) => (located(p) ? distanceKm(origin, p) : Infinity);
+		return [...places].sort((a, b) => km(a) - km(b));
 	});
 
 	$effect(() => {
-		if (choice === 'new' && here) value = { name: newName.trim(), ...here };
-		else if (choice) value = { id: Number(choice) };
-		else value = null;
+		const trimmed = name.trim();
+		value = trimmed ? { name: trimmed, ...(here ?? {}) } : null;
 	});
 
 	async function suggestName(at: Coordinates) {
-		if (suggested) return;
-		suggested = true;
 		try {
 			const res = await fetch(nominatimReverseUrl(at), { headers: { Accept: 'application/json' } });
-			const name = res.ok ? placeNameFromNominatim(await res.json()) : '';
-			if (name && !newName) newName = name;
+			const suggestion = res.ok ? placeNameFromNominatim(await res.json()) : '';
+			if (suggestion && !name) name = suggestion;
 		} catch {
 			// The name stays blank; typing one by hand is the fallback.
 		}
-	}
-
-	function onChoice(e?: Event) {
-		if (e) choice = (e.currentTarget as HTMLSelectElement).value;
-		if (choice === 'new' && here) suggestName(here);
 	}
 
 	function locate() {
@@ -77,14 +74,11 @@
 		navigator.geolocation.getCurrentPosition(
 			({ coords }) => {
 				locating = false;
-				here = { latitude: coords.latitude, longitude: coords.longitude };
-				const nearest = options[0];
-				if (nearest && distanceKm(here, nearest.place) <= NEARBY_KM) {
-					choice = String(nearest.place.id);
-				} else {
-					choice = 'new';
-				}
-				onChoice();
+				const at = { latitude: coords.latitude, longitude: coords.longitude };
+				here = at;
+				const nearest = places.filter(located).find((p) => distanceKm(at, p) <= NEARBY_KM);
+				name = nearest?.name ?? '';
+				if (!nearest) suggestName(at);
 			},
 			(err) => {
 				locating = false;
@@ -98,34 +92,31 @@
 <div class="place-field" id="place">
 	<label>
 		<span class="label">Place</span>
-		<select value={choice} onchange={onChoice} {disabled}>
-			<option value="">None</option>
-			{#each options as { place, label } (place.id)}
-				<option value={String(place.id)}>{label}</option>
-			{/each}
-			{#if here}
-				<option value="new">New place here…</option>
-			{/if}
-		</select>
+		<input
+			type="text"
+			name="place"
+			list="place-names"
+			autocomplete="off"
+			bind:value={name}
+			placeholder="Where are you?"
+			{disabled}
+		/>
 	</label>
+	<datalist id="place-names">
+		{#each byDistance as place (place.slug)}
+			<option value={place.name}></option>
+		{/each}
+	</datalist>
 
-	{#if choice === 'new' && here}
-		<label>
-			<span class="label visually-hidden">New place name</span>
-			<input
-				type="text"
-				name="place-name"
-				bind:value={newName}
-				placeholder="Place name"
-				{disabled}
-			/>
-			<span class="hint">
-				{here.latitude.toFixed(4)}, {here.longitude.toFixed(4)} · names suggested by
-				<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
-					>OpenStreetMap</a
-				>
-			</span>
-		</label>
+	{#if here}
+		<span class="hint">
+			{here.latitude.toFixed(4)}, {here.longitude.toFixed(4)}
+			<button type="button" class="link" onclick={() => (here = null)} {disabled}>forget</button>
+			· names from
+			<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
+				>OpenStreetMap</a
+			>
+		</span>
 	{/if}
 
 	<button type="button" class="link" onclick={locate} disabled={disabled || locating}>
@@ -152,7 +143,6 @@
 		color: var(--color-ink-soft);
 	}
 
-	select,
 	input {
 		font: inherit;
 		min-width: 0;
@@ -165,23 +155,6 @@
 		&:hover {
 			background: var(--color-field-focus);
 		}
-	}
-
-	.visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
-
-	.field-error {
-		color: var(--color-danger);
-		font-size: var(--size-meta);
 	}
 
 	.link {
@@ -202,9 +175,21 @@
 
 	.hint {
 		font-style: italic;
+		font-size: var(--size-meta);
+		color: var(--color-ink-soft);
+	}
+
+	.hint .link {
+		font-style: italic;
+		text-decoration: underline;
 	}
 
 	.hint a {
 		color: inherit;
+	}
+
+	.field-error {
+		color: var(--color-danger);
+		font-size: var(--size-meta);
 	}
 </style>

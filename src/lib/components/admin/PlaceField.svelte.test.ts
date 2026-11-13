@@ -1,10 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import PlaceField from './PlaceField.svelte';
-import type { AdminPlace } from '$lib/types';
+import type { KnownPlace } from '$lib/types';
 
-const home: AdminPlace = { id: 1, name: 'Home', slug: 'home', latitude: 42.3736, longitude: -71.1097, count: 9 };
-const lisbon: AdminPlace = { id: 2, name: 'Lisbon', slug: 'lisbon', latitude: 38.7223, longitude: -9.1393, count: 2 };
+const cambridge: KnownPlace = {
+	name: 'Cambridge, Massachusetts',
+	slug: 'cambridge-massachusetts',
+	latitude: 42.3734,
+	longitude: -71.1143,
+	count: 9
+};
+const lisbon: KnownPlace = { name: 'Lisbon, Portugal', slug: 'lisbon-portugal', latitude: 38.7223, longitude: -9.1393, count: 2 };
+const train: KnownPlace = { name: 'A train somewhere', slug: 'a-train-somewhere', latitude: null, longitude: null, count: 1 };
 
 afterEach(() => {
 	cleanup();
@@ -28,37 +35,44 @@ function stubNominatim(address: Record<string, string>) {
 	return mock;
 }
 
-function optionLabels(container: HTMLElement) {
-	return [...container.querySelectorAll('option')].map((o) => o.textContent?.trim());
-}
+const nameInput = (c: HTMLElement) => c.querySelector('input[name="place"]') as HTMLInputElement;
+const suggestions = (c: HTMLElement) =>
+	[...c.querySelectorAll('datalist option')].map((o) => (o as HTMLOptionElement).value);
 
 describe('PlaceField', () => {
-	it('selects the initial place by slug', () => {
-		const { container } = render(PlaceField, { props: { places: [home, lisbon], initialSlug: 'lisbon' } });
-		expect((container.querySelector('select') as HTMLSelectElement).value).toBe('2');
+	it('shows the initial name and coordinates', () => {
+		const { container, getByText } = render(PlaceField, {
+			props: { initial: { name: 'Lisbon, Portugal', slug: 'lisbon-portugal', latitude: 38.7223, longitude: -9.1393 } }
+		});
+		expect(nameInput(container).value).toBe('Lisbon, Portugal');
+		expect(getByText(/38\.7223, -9\.1393/)).not.toBeNull();
 	});
 
-	it('after locating, sorts places nearest first and pre-selects one within 500 m', async () => {
-		stubGeolocation(42.374, -71.11);
+	it('offers known names, nearest first once located', async () => {
+		stubGeolocation(38.72, -9.14);
 		stubNominatim({});
-		const { container, getByRole } = render(PlaceField, { props: { places: [lisbon, home] } });
-		await fireEvent.click(getByRole('button', { name: 'Use my location' }));
-		await waitFor(() => expect(optionLabels(container)[1]).toMatch(/^Home · 0\.1 km$/));
-		expect(optionLabels(container)[2]).toMatch(/^Lisbon · /);
-		expect((container.querySelector('select') as HTMLSelectElement).value).toBe('1');
-	});
-
-	it('far from every place, selects New place and suggests a name from OpenStreetMap', async () => {
-		stubGeolocation(40.7128, -74.006);
-		const fetchMock = stubNominatim({ city: 'New York', state: 'New York', country_code: 'us' });
-		const { container, getByRole } = render(PlaceField, { props: { places: [home] } });
+		const { container, getByRole } = render(PlaceField, { props: { places: [train, cambridge, lisbon] } });
+		expect(suggestions(container)).toEqual(['A train somewhere', 'Cambridge, Massachusetts', 'Lisbon, Portugal']);
 		await fireEvent.click(getByRole('button', { name: 'Use my location' }));
 		await waitFor(() =>
-			expect((container.querySelector('input[name="place-name"]') as HTMLInputElement)?.value).toBe(
-				'New York, New York'
-			)
+			expect(suggestions(container)).toEqual(['Lisbon, Portugal', 'Cambridge, Massachusetts', 'A train somewhere'])
 		);
-		expect((container.querySelector('select') as HTMLSelectElement).value).toBe('new');
+	});
+
+	it('near a known place, fills in its name', async () => {
+		stubGeolocation(42.3736, -71.1097);
+		stubNominatim({ city: 'Somewhere Else' });
+		const { container, getByRole } = render(PlaceField, { props: { places: [cambridge] } });
+		await fireEvent.click(getByRole('button', { name: 'Use my location' }));
+		await waitFor(() => expect(nameInput(container).value).toBe('Cambridge, Massachusetts'));
+	});
+
+	it('far from every known place, fills in the OpenStreetMap suggestion', async () => {
+		stubGeolocation(40.7128, -74.006);
+		const fetchMock = stubNominatim({ city: 'New York', state: 'New York', country_code: 'us' });
+		const { container, getByRole } = render(PlaceField, { props: { places: [cambridge] } });
+		await fireEvent.click(getByRole('button', { name: 'Use my location' }));
+		await waitFor(() => expect(nameInput(container).value).toBe('New York, New York'));
 		expect(fetchMock.mock.calls[0][0]).toContain('nominatim.openstreetmap.org/reverse');
 	});
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { postInputSchema, type PostInputParsed, type PlaceInputParsed } from '$lib/schemas';
-	import type { AdminPlace, Place } from '$lib/types';
+	import type { KnownPlace, PlaceLocation } from '$lib/types';
 	import ImageUploadModal from './ImageUploadModal.svelte';
 	import PlaceField from './PlaceField.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
@@ -13,13 +13,13 @@
 		title?: string | null;
 		url?: string | null;
 		tags?: { name: string }[] | string[];
-		place?: Place | null;
 	}
 
 	interface Props {
 		mode: 'create' | 'edit';
 		initial?: Initial;
-		places?: AdminPlace[];
+		places?: KnownPlace[];
+		location?: PlaceLocation | null;
 		onSuccess?: (slug: string, payload: PostInputParsed) => void;
 		imageModalOpen?: boolean;
 		submitting?: boolean;
@@ -30,6 +30,7 @@
 		mode,
 		initial = {},
 		places = [],
+		location = null,
 		onSuccess,
 		imageModalOpen = $bindable(false),
 		submitting = $bindable(false),
@@ -103,7 +104,7 @@
 				title: flat.title?.[0],
 				url: flat.url?.[0],
 				tags: flat.tags?.[0],
-				place: flat.place ? 'Give the new place a name.' : undefined
+				place: flat.place ? 'Those coordinates don’t look right.' : undefined
 			};
 			return;
 		}
@@ -239,7 +240,7 @@
 
     <PlaceField
       {places}
-      initialSlug={initial.place?.slug}
+      initial={location}
       bind:value={place}
       disabled={submitting}
       error={fieldErrors.place}

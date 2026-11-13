@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Post } from '$lib/db';
 
-vi.mock('$lib/db', () => ({ getPostBySlug: vi.fn(), getPlaces: vi.fn(() => []) }));
+vi.mock('$lib/db', () => ({
+	getPostBySlug: vi.fn(),
+	getPlaceNames: vi.fn(() => []),
+	getPostLocation: vi.fn(() => null)
+}));
 
 import { load } from './+page.server';
-import { getPostBySlug, getPlaces } from '$lib/db';
+import { getPostBySlug, getPlaceNames, getPostLocation } from '$lib/db';
 
 const mockGet = vi.mocked(getPostBySlug);
 
@@ -18,7 +22,6 @@ function makePost(over: Partial<Post> = {}): Post {
 		url: null,
 		created_at,
 		draft: 0,
-		place_id: null,
 		type: 'post',
 		date: created_at,
 		tags: [],
@@ -54,11 +57,18 @@ describe('admin edit-post loader', () => {
 		});
 	});
 
-	it('returns known places for the place picker', async () => {
-		const home = { id: 1, name: 'Home', slug: 'home', latitude: 1, longitude: 2, created_at: 0, count: 3 };
-		vi.mocked(getPlaces).mockReturnValue([home]);
+	it('returns the post location and known place names', async () => {
+		const home = { name: 'Home', slug: 'home', latitude: 1, longitude: 2, count: 3 };
+		const here = { name: 'Home', slug: 'home', latitude: 1.1, longitude: 2.1 };
+		vi.mocked(getPlaceNames).mockReturnValue([home]);
+		vi.mocked(getPostLocation).mockReturnValue(here);
 		mockGet.mockReturnValue(makePost());
-		const result = (await load({ params: { slug: 'hello' } } as never)) as { places: unknown[] };
+		const result = (await load({ params: { slug: 'hello' } } as never)) as {
+			places: unknown[];
+			location: unknown;
+		};
+		expect(vi.mocked(getPostLocation)).toHaveBeenCalledWith(1);
 		expect(result.places).toEqual([home]);
+		expect(result.location).toEqual(here);
 	});
 });

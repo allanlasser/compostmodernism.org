@@ -16,10 +16,6 @@ function stubFetchOk(payload: unknown = {}) {
 	return mock;
 }
 
-async function choose(container: HTMLElement, value: string) {
-	await fireEvent.change(container.querySelector('select') as HTMLSelectElement, { target: { value } });
-}
-
 describe('PostForm', () => {
 	it('blocks submit and surfaces an error when body is empty', async () => {
 		const fetchMock = stubFetchOk();
@@ -252,30 +248,32 @@ describe('PostForm', () => {
 		expect(alert.textContent).toContain('Not found');
 	});
 
-	it('create mode: sends the chosen existing place', async () => {
+	it('create mode: sends a typed place name', async () => {
 		const fetchMock = stubFetchOk({ ok: true, slug: 'here' });
-		const places = [{ id: 7, name: 'Home', slug: 'home', latitude: 1, longitude: 2, count: 1 }];
-		const { container, getByRole } = render(PostForm, { props: { mode: 'create', places } });
+		const { container, getByRole } = render(PostForm, { props: { mode: 'create' } });
 		await fireEvent.input(container.querySelector('textarea') as HTMLTextAreaElement, {
 			target: { value: 'A post.' }
 		});
-		await choose(container, '7');
+		await fireEvent.input(container.querySelector('input[name="place"]') as HTMLInputElement, {
+			target: { value: 'A train somewhere' }
+		});
 		await fireEvent.click(getByRole('button', { name: 'Publish' }));
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-		expect(body.place).toEqual({ id: 7 });
+		expect(body.place).toEqual({ name: 'A train somewhere' });
 	});
 
-	it('edit mode: clearing the place sends null', async () => {
+	it('edit mode: emptying the place name sends null', async () => {
 		const fetchMock = stubFetchOk({ ok: true });
-		const places = [{ id: 7, name: 'Home', slug: 'home', latitude: 1, longitude: 2, count: 1 }];
 		const { container, getByRole } = render(PostForm, {
 			props: {
 				mode: 'edit',
-				places,
-				initial: { slug: 'existing', body: 'b', place: { name: 'Home', slug: 'home' } }
+				initial: { slug: 'existing', body: 'b' },
+				location: { name: 'Home', slug: 'home', latitude: 1, longitude: 2 }
 			}
 		});
-		await choose(container, '');
+		await fireEvent.input(container.querySelector('input[name="place"]') as HTMLInputElement, {
+			target: { value: '' }
+		});
 		await fireEvent.click(getByRole('button', { name: 'Save' }));
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
 		expect(body.place).toBeNull();

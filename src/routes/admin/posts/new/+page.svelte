@@ -1,9 +1,9 @@
 <script lang="ts">
 	import PostForm from '$lib/components/admin/PostForm.svelte';
-	import type { AdminPlace } from '$lib/types';
+	import type { KnownPlace } from '$lib/types';
 
 	interface Props {
-		data?: { places?: AdminPlace[] };
+		data?: { places?: KnownPlace[] };
 	}
 
 	let { data }: Props = $props();

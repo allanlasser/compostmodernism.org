@@ -30,9 +30,11 @@ export interface Image {
   credit: string | null;
   usage_count: number;
 }
-export interface AdminPlace extends Place {
-  id: number;
-  latitude: number;
-  longitude: number;
+export interface PlaceLocation extends Place {
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface KnownPlace extends PlaceLocation {
   count: number;
 }
