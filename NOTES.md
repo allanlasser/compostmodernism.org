@@ -5,6 +5,30 @@ entries go on top.
 
 ---
 
+## Svelte `bind:value` on `<select>` doesn't fire in happy-dom
+
+`fireEvent.change(select, { target: { value: '7' } })` updates `select.value`, but
+a Svelte 5 `bind:value` on the `<select>` never sees it, and neither did a function
+binding. Svelte's select binding reads the selected option via `:checked`, which
+happy-dom doesn't keep in step. Setting `option.selected = true` didn't help either.
+Use `value={x}` plus an `onchange` that reads `e.currentTarget.value`, which
+works in both happy-dom and real browsers, for any `<select>` that tests need to
+drive. (Found while building the first, select-based version of the place
+picker.)
+
+---
+
+## Nominatim from a sandbox or a Playwright run
+
+The cloud dev sandbox can't reach `nominatim.openstreetmap.org` (proxy refusal), so
+place-name suggestions come back blank there. In production the request goes from
+the admin's browser, not the server. To exercise it in Playwright, stub it with
+`context.route(...)`, and include `Access-Control-Allow-Origin: *` in the stubbed
+response. Without it the cross-origin `fetch` fails silently and the name field
+stays empty, which looks like a component bug.
+
+---
+
 ## The nightly backup never ran: a devDependency, an unwritable log, and tests that didn't run
 
 Issue #13. Three things stacked, and each hid the others:

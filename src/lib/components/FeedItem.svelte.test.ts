@@ -173,4 +173,13 @@ describe('FeedItem', () => {
 		expect(extra).not.toBeNull();
 		expect(extra?.textContent).toBe('EXTRA');
 	});
+
+	it('links the place to its place page', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ place: { name: 'Cambridge, Massachusetts', slug: 'cambridge-massachusetts' } }) }
+		});
+		const link = container.querySelector('.rail a.place') as HTMLAnchorElement;
+		expect(link.getAttribute('href')).toBe('/place/cambridge-massachusetts');
+		expect(link.textContent).toBe('Cambridge, Massachusetts');
+	});
 });

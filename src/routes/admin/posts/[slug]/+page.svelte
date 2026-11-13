@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PostForm from '$lib/components/admin/PostForm.svelte';
+	import type { KnownPlace, PlaceLocation } from '$lib/types';
 
 	interface PostData {
 		slug: string;
@@ -13,7 +14,7 @@
 	}
 
 	interface Props {
-		data: { post: PostData };
+		data: { post: PostData; places?: KnownPlace[]; location?: PlaceLocation | null };
 	}
 
 	let { data }: Props = $props();
@@ -30,7 +31,7 @@
   </p>
 </header>
 
-<PostForm mode="edit" initial={data.post} />
+<PostForm mode="edit" initial={data.post} places={data.places} location={data.location} />
 
 <style>
 	.edit-header {

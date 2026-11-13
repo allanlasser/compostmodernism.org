@@ -39,6 +39,7 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── db.ts            # createDb() + all query functions (typed PostRow/Post/Tag/ImageRow)
 │   │   ├── migrate.ts       # Runs pending migrations/*.sql per PRAGMA user_version
 │   │   ├── slug.ts          # slugify, hashSlug, dateParts, permalink, shortlink
+│   │   ├── geo.ts           # distanceKm (haversine) + Nominatim reverse-geocode URL and name formatting
 │   │   ├── shortid.ts       # Sqids encode/decode for short post tokens
 │   │   ├── shortid-freeze.ts # Freezes current tokens into shortlink_redirects (migration tool)
 │   │   ├── markdown.ts      # marked wrapper used by feed + post pages
@@ -47,13 +48,14 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
 │   │   ├── schemas.ts       # Shared zod schemas (postInputSchema, postUpdateSchema, imageMetadataSchema)
-│   │   └── components/      # FeedItem, Dateline, TagList, SocialMeta + admin/ (PostForm, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
+│   │   └── components/      # FeedItem, Dateline, TagList, SocialMeta + admin/ (PostForm, PlaceField, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
 │   ├── routes/
 │   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection, siteUrl
 │   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
 │   │   ├── +error.svelte                  # Error/404 page inside site chrome
 │   │   ├── [year]/[month]/[day]/[slug]/   # Single-post permalink
 │   │   ├── tag/[slug]/                    # Tag feed
+│   │   ├── place/[slug]/                  # Place feed (posts written at one place)
 │   │   ├── admin/                         # Login, posts table + new/edit pages, images table
 │   │   ├── feeds/posts.xml/+server.ts     # GET — RSS 2.0 (full-text)
 │   │   └── api/
@@ -77,7 +79,8 @@ This file is the architectural overview — what the running app actually is.
 │   ├── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
 │   ├── 002_slug_redirects.sql    # Path → post_id ledger for slug/date renames
 │   ├── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
-│   └── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
+│   ├── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
+│   └── 005_places.sql            # posts.latitude/longitude/place_name/place_slug
 ├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
@@ -122,6 +125,21 @@ on which fields are present:
 - **Link post** — `url` + `title` → title links externally, marker `→` rendered.
 - **Titled post** — `title` only → `<h2>` heading.
 - **Plain post** — body only, no heading.
+
+### Places
+
+Each post can store where it was written in four nullable columns on `posts`:
+`latitude`, `longitude`, `place_name`, and `place_slug` (`slugify(place_name)`).
+Posts sharing a `place_slug` share a feed at `/place/[slug]`, linked from the post
+rail under the dateline. Hydrated posts expose only `place: { name, slug }`.
+Coordinates come only from `getPostLocation` (admin edit loader, nightly archive)
+and `getPlaceNames` (admin autocomplete), never from public pages or their data.
+
+In the admin form, **Use my location** reads `navigator.geolocation`. If a known
+place's average position is within 500 m, its name is filled in. Otherwise
+OpenStreetMap Nominatim, called from the browser, suggests a city-level name. The
+field is always editable, and a `<datalist>` offers names already used, nearest
+first. See SPEC §17.
 
 ### Social sharing previews
 
@@ -270,7 +288,10 @@ Creates a new post.
 | 400 | `{ error }` | Invalid body, or `url` provided without `title` |
 | 201 | `{ ok: true, slug: string, permalink: string }` | Post created |
 
-**Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1 }`
+**Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1, place?: Place }`
+
+`Place` is `{ name: string, latitude?: number, longitude?: number }`. Latitude and longitude come as a
+pair or not at all. Posts whose names slugify the same are grouped on one place page.
 
 ### `PATCH /api/post/[slug]`
 
@@ -287,7 +308,9 @@ the new canonical permalink.
 | 409 | `{ error }` | Requested `slug` is already in use by another post |
 | 200 | `{ ok: true, slug: string }` | Post updated; `slug` is the current (post-rename) slug |
 
-**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number, draft?: 0 | 1 }`
+**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number, draft?: 0 | 1, place?: Place | null }`
+
+Omitting `place` keeps the current one; `null` clears it.
 
 ### `DELETE /api/post/[slug]`
 

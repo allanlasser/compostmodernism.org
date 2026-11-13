@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { postInputSchema, type PostInputParsed } from '$lib/schemas';
+	import { postInputSchema, type PostInputParsed, type PlaceInputParsed } from '$lib/schemas';
+	import type { KnownPlace, PlaceLocation } from '$lib/types';
 	import ImageUploadModal from './ImageUploadModal.svelte';
+	import PlaceField from './PlaceField.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { LoaderCircle } from '@lucide/svelte';
 
@@ -16,6 +18,8 @@
 	interface Props {
 		mode: 'create' | 'edit';
 		initial?: Initial;
+		places?: KnownPlace[];
+		location?: PlaceLocation | null;
 		onSuccess?: (slug: string, payload: PostInputParsed) => void;
 		imageModalOpen?: boolean;
 		submitting?: boolean;
@@ -25,6 +29,8 @@
 	let {
 		mode,
 		initial = {},
+		places = [],
+		location = null,
 		onSuccess,
 		imageModalOpen = $bindable(false),
 		submitting = $bindable(false),
@@ -43,6 +49,7 @@
 	let url = $state(untrack(() => initial.url ?? ''));
 	let tags = $state(untrack(() => tagsToString(initial.tags)));
 	let slug = $state(untrack(() => initial.slug ?? ''));
+	let place = $state<PlaceInputParsed | null>(null);
 
 	let bodyTextarea: HTMLTextAreaElement | undefined = $state();
 
@@ -64,7 +71,7 @@
 		});
 	}
 
-	type FieldErrors = { body?: string; title?: string; url?: string; tags?: string };
+	type FieldErrors = { body?: string; title?: string; url?: string; tags?: string; place?: string };
 	let fieldErrors = $state<FieldErrors>({});
 	let formError = $state('');
 	let savedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -77,7 +84,8 @@
 			tags: tags
 				.split(',')
 				.map((t) => t.trim())
-				.filter(Boolean)
+				.filter(Boolean),
+			...(place ? { place } : {})
 		};
 	}
 
@@ -95,7 +103,8 @@
 				body: flat.body?.[0],
 				title: flat.title?.[0],
 				url: flat.url?.[0],
-				tags: flat.tags?.[0]
+				tags: flat.tags?.[0],
+				place: flat.place ? 'Those coordinates don’t look right.' : undefined
 			};
 			return;
 		}
@@ -110,6 +119,7 @@
 		const method = mode === 'create' ? 'POST' : 'PATCH';
 
 		const wirePayload: Record<string, unknown> = { ...parsed.data };
+		if (mode === 'edit' && !place) wirePayload.place = null;
 		const trimmedSlug = slug.trim();
 		if (trimmedSlug && trimmedSlug !== (initial.slug ?? '')) {
 			wirePayload.slug = trimmedSlug;
@@ -227,6 +237,14 @@
         disabled={submitting}
       />
     </label>
+
+    <PlaceField
+      {places}
+      initial={location}
+      bind:value={place}
+      disabled={submitting}
+      error={fieldErrors.place}
+    />
   </div>
 
   <div class="actions">

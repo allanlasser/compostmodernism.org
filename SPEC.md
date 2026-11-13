@@ -1701,6 +1701,36 @@ published after inspection.
   and are not in the ledger. Sanity's own links are never left in a body.
 - **Idempotence.** Re-running skips posts whose slug already exists.
 
+## 17. Places
+
+Journal entries are written somewhere, and the place is part of the entry. A post
+can carry a place name and the coordinates it was written at.
+
+- **Columns on `posts`, not a table.** `latitude`, `longitude`, `place_name`,
+  `place_slug`, all nullable. Every entry is written somewhere new, so there's no
+  shared row to pick or maintain. (A first draft had a `places` table with
+  pick-or-create. It was dropped before merge for this reason.)
+- **Grouping is by name.** `place_slug = slugify(place_name)`, indexed, and
+  `/place/[slug]` lists that slug's published posts. Nearby spots group together
+  because the name suggestion is city-level: a kitchen and Harvard Square both
+  come back as "Cambridge, Massachusetts". To regroup a post, edit its name. To
+  rename a whole place, run one `UPDATE` on `place_name`/`place_slug`.
+- **Consistent names.** Grouping is only as good as the spelling, so the admin
+  field offers a `<datalist>` of names already used, nearest first, and locating
+  within 500 m of a known place's average position fills in that name.
+- **Name without coordinates is allowed.** A place can be typed by hand when
+  geolocation is unavailable. Latitude and longitude come as a pair or not at all.
+- **Coordinates are private.** Exact coordinates can reveal a home address, so
+  `hydrate` strips them and public reads return only `{ name, slug }`. Only the
+  authed admin loaders and the nightly archive see latitude and longitude.
+- **Naming source.** The browser asks OpenStreetMap Nominatim's `/reverse` (free,
+  no key, about 1 request per second, attribution required) for "Locality, State"
+  in the US or "Locality, Country" elsewhere. It's a suggestion only. A failed
+  lookup leaves the field blank.
+- **API.** `place` on `POST`/`PATCH /api/post` is `{ name, latitude?, longitude? }`.
+  On `PATCH`, `null` clears it and omitting it keeps it.
+- **Not yet:** bulk rename/merge in the admin, maps, place in RSS.
+
 ## Content Workflows Summary
 
 ### Plain note (phone)

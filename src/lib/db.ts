@@ -25,12 +25,39 @@ export interface PostRow {
 	url: string | null;
 	created_at: number;
 	draft: number;
+	latitude: number | null;
+	longitude: number | null;
+	place_name: string | null;
+	place_slug: string | null;
 }
 
-export interface Post extends PostRow {
+export interface PublicPlace {
+	name: string;
+	slug: string;
+}
+
+export interface PostLocation extends PublicPlace {
+	latitude: number | null;
+	longitude: number | null;
+}
+
+export interface PlaceName extends PostLocation {
+	count: number;
+}
+
+export interface PlaceInput {
+	name: string;
+	latitude?: number | null;
+	longitude?: number | null;
+}
+
+type PrivatePlaceColumns = 'latitude' | 'longitude' | 'place_name' | 'place_slug';
+
+export interface Post extends Omit<PostRow, PrivatePlaceColumns> {
 	type: 'post';
 	date: number;
 	tags: Tag[];
+	place: PublicPlace | null;
 }
 
 export interface PostInput {
@@ -41,6 +68,7 @@ export interface PostInput {
 	slug?: string;
 	created_at?: number;
 	draft?: number;
+	place?: PlaceInput | null;
 }
 
 export interface PostUpdate {
@@ -51,6 +79,7 @@ export interface PostUpdate {
 	slug?: string;
 	created_at?: number;
 	draft?: number;
+	place?: PlaceInput | null;
 }
 
 export interface LookupOptions {
@@ -134,7 +163,76 @@ export function createDb(path: string) {
 	}
 
 	function hydrate(row: PostRow): Post {
-		return { ...row, type: 'post', date: row.created_at, tags: getTagsForPost(row.id) };
+		const { latitude: _lat, longitude: _lon, place_name, place_slug, ...rest } = row;
+		return {
+			...rest,
+			type: 'post',
+			date: row.created_at,
+			tags: getTagsForPost(row.id),
+			place: place_name && place_slug ? { name: place_name, slug: place_slug } : null
+		};
+	}
+
+	function placeColumns(place: PlaceInput | null | undefined) {
+		if (!place) return { latitude: null, longitude: null, place_name: null, place_slug: null };
+		const name = place.name.trim();
+		return {
+			latitude: place.latitude ?? null,
+			longitude: place.longitude ?? null,
+			place_name: name,
+			place_slug: slugify(name)
+		};
+	}
+
+	function getPostLocation(postId: number): PostLocation | null {
+		const row = raw
+			.prepare(
+				`SELECT place_name AS name, place_slug AS slug, latitude, longitude
+				 FROM posts WHERE id = ? AND place_slug IS NOT NULL`
+			)
+			.get(postId) as PostLocation | undefined;
+		return row ?? null;
+	}
+
+	function getPlaceNames(): PlaceName[] {
+		return raw
+			.prepare(
+				`SELECT
+				   (SELECT place_name FROM posts p2 WHERE p2.place_slug = p.place_slug
+				    ORDER BY created_at DESC, id DESC LIMIT 1) AS name,
+				   place_slug AS slug,
+				   AVG(latitude) AS latitude,
+				   AVG(longitude) AS longitude,
+				   COUNT(*) AS count
+				 FROM posts p
+				 WHERE place_slug IS NOT NULL
+				 GROUP BY place_slug
+				 ORDER BY MAX(created_at) DESC`
+			)
+			.all() as PlaceName[];
+	}
+
+	function getPlaceBySlug(slug: string): PublicPlace | null {
+		const row = raw
+			.prepare(
+				`SELECT place_name AS name, place_slug AS slug FROM posts
+				 WHERE place_slug = ? AND draft = 0
+				 ORDER BY created_at DESC, id DESC LIMIT 1`
+			)
+			.get(slug) as PublicPlace | undefined;
+		return row ?? null;
+	}
+
+	function getPostsByPlace(placeSlug: string, { limit = 50 }: { limit?: number } = {}): Post[] | null {
+		const rows = raw
+			.prepare(
+				`SELECT * FROM posts
+				 WHERE place_slug = ? AND draft = 0
+				 ORDER BY created_at DESC, id DESC
+				 LIMIT ?`
+			)
+			.all(placeSlug, limit) as PostRow[];
+		return rows.length ? rows.map(hydrate) : null;
 	}
 
 	function recordImage(key: string): ImageRow {
@@ -239,10 +337,20 @@ export function createDb(path: string) {
 			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(ts));
 		const result = raw
 			.prepare(
-				`INSERT INTO posts (slug, body, title, url, created_at, draft)
-				 VALUES (?, ?, ?, ?, ?, ?)`
+				`INSERT INTO posts (slug, body, title, url, created_at, draft,
+				                    latitude, longitude, place_name, place_slug)
+				 VALUES (@slug, @body, @title, @url, @created_at, @draft,
+				         @latitude, @longitude, @place_name, @place_slug)`
 			)
-			.run(slug, input.body, input.title ?? null, input.url ?? null, ts, input.draft ?? 0);
+			.run({
+				slug,
+				body: input.body,
+				title: input.title ?? null,
+				url: input.url ?? null,
+				created_at: ts,
+				draft: input.draft ?? 0,
+				...placeColumns(input.place)
+			});
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
 		setPostImages(id, input.body);
@@ -407,6 +515,13 @@ export function createDb(path: string) {
 			existing.id
 		);
 
+		if (update.place !== undefined) {
+			raw.prepare(
+				`UPDATE posts SET latitude = @latitude, longitude = @longitude,
+				 place_name = @place_name, place_slug = @place_slug WHERE id = @id`
+			).run({ id: existing.id, ...placeColumns(update.place) });
+		}
+
 		if (Array.isArray(update.tags)) setPostTags(existing.id, update.tags);
 		setPostImages(existing.id, update.body);
 	}
@@ -445,7 +560,11 @@ export function createDb(path: string) {
 		updateImage,
 		touchImage,
 		deleteImage,
-		setPostImages
+		setPostImages,
+		getPostLocation,
+		getPlaceNames,
+		getPlaceBySlug,
+		getPostsByPlace
 	};
 }
 
@@ -490,3 +609,8 @@ export const deleteImage: Db['deleteImage'] = (id) => defaultDb().deleteImage(id
 export const setPostImages: Db['setPostImages'] = (postId, body) =>
 	defaultDb().setPostImages(postId, body);
 export const getPostCadence: Db['getPostCadence'] = () => defaultDb().getPostCadence();
+export const getPostLocation: Db['getPostLocation'] = (id) => defaultDb().getPostLocation(id);
+export const getPlaceNames: Db['getPlaceNames'] = () => defaultDb().getPlaceNames();
+export const getPlaceBySlug: Db['getPlaceBySlug'] = (slug) => defaultDb().getPlaceBySlug(slug);
+export const getPostsByPlace: Db['getPostsByPlace'] = (slug, opts) =>
+	defaultDb().getPostsByPlace(slug, opts);

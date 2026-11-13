@@ -3,6 +3,11 @@ export interface Tag {
   slug: string;
 }
 
+export interface Place {
+  name: string;
+  slug: string;
+}
+
 export interface Post {
   slug: string;
   body: string;
@@ -10,6 +15,7 @@ export interface Post {
   url: string | null;
   date: number;
   tags: Tag[];
+  place?: Place | null;
   permalink: string;
 }
 
@@ -23,4 +29,12 @@ export interface Image {
   caption: string | null;
   credit: string | null;
   usage_count: number;
+}
+export interface PlaceLocation extends Place {
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface KnownPlace extends PlaceLocation {
+  count: number;
 }

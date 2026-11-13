@@ -42,7 +42,8 @@ const existing = {
 	draft: 0,
 	type: 'post' as const,
 	date: 1700000000000,
-	tags: []
+	tags: [],
+	place: null
 };
 
 beforeEach(() => {
@@ -272,5 +273,18 @@ describe('DELETE /api/post/[slug]', () => {
 		} as never);
 		expect(res.status).toBe(200);
 		expect(mockDelete).toHaveBeenCalledWith('hello');
+	});
+});
+
+describe('PATCH /api/post/[slug] place', () => {
+	it('passes null through to clear the place', async () => {
+		mockGet.mockReturnValue(existing);
+		const res = await PATCH({
+			request: req({ place: null }, 'Bearer test-secret'),
+			params: { slug: 'hello' },
+			cookies: cookies()
+		} as never);
+		expect(res.status).toBe(200);
+		expect(mockUpdate).toHaveBeenCalledWith('hello', expect.objectContaining({ place: null }));
 	});
 });

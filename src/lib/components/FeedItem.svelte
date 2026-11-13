@@ -83,6 +83,9 @@
     <a class="permalink" href={post.permalink}>
       <Dateline date={post.date} />
     </a>
+    {#if post.place}
+      <a class="place" href="/place/{post.place.slug}">{post.place.name}</a>
+    {/if}
     <TagList tags={post.tags} />
     {#if rail}{@render rail()}{/if}
 	</aside>

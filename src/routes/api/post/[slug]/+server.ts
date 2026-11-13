@@ -21,7 +21,7 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ error: parsed.error.flatten((i) => i.message) }, { status: 400 });
 	}
 
-	const { body, title, url, tags, slug: newSlug, created_at, draft } = parsed.data;
+	const { body, title, url, tags, slug: newSlug, created_at, draft, place } = parsed.data;
 
 	if (url && !title) {
 		return json({ error: 'title is required when url is provided' }, { status: 400 });
@@ -41,7 +41,8 @@ export const PATCH: RequestHandler = async (event) => {
 		tags,
 		slug: newSlug,
 		created_at,
-		draft
+		draft,
+		place
 	});
 	return json({ ok: true, slug: newSlug ?? slug });
 };
