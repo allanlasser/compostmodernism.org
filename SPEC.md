@@ -1704,28 +1704,32 @@ published after inspection.
 ## 17. Places
 
 Journal entries are written somewhere, and the place is part of the entry. A post
-carries at most one place: a name plus the coordinates it was written at.
+can carry a place name and the coordinates it was written at.
 
-- **Its own table.** `places` (`id`, `name`, `slug` unique, `latitude`, `longitude`,
-  `created_at`), linked by nullable `posts.place_id` with `ON DELETE SET NULL`. One
-  place collects many posts and gets a feed at `/place/[slug]`, like a tag.
-- **Pick or create, never merge by distance.** Two posts share a place because you
-  chose the same one, not because their coordinates were close. The admin form
-  sorts known places nearest first and pre-selects one within 500 m as a
-  convenience. The only automatic reuse is by name: creating a place whose name
-  slugifies to an existing slug reuses it (the tag rule), so a Shortcut that always
-  sends "Home" stays on one row.
+- **Columns on `posts`, not a table.** `latitude`, `longitude`, `place_name`,
+  `place_slug`, all nullable. Every entry is written somewhere new, so there's no
+  shared row to pick or maintain. (A first draft had a `places` table with
+  pick-or-create. It was dropped before merge for this reason.)
+- **Grouping is by name.** `place_slug = slugify(place_name)`, indexed, and
+  `/place/[slug]` lists that slug's published posts. Nearby spots group together
+  because the name suggestion is city-level: a kitchen and Harvard Square both
+  come back as "Cambridge, Massachusetts". To regroup a post, edit its name. To
+  rename a whole place, run one `UPDATE` on `place_name`/`place_slug`.
+- **Consistent names.** Grouping is only as good as the spelling, so the admin
+  field offers a `<datalist>` of names already used, nearest first, and locating
+  within 500 m of a known place's average position fills in that name.
+- **Name without coordinates is allowed.** A place can be typed by hand when
+  geolocation is unavailable. Latitude and longitude come as a pair or not at all.
 - **Coordinates are private.** Exact coordinates can reveal a home address, so
-  public reads (`hydrate`, `getPlaceBySlug`) return only `{ name, slug }`. Only the
+  `hydrate` strips them and public reads return only `{ name, slug }`. Only the
   authed admin loaders and the nightly archive see latitude and longitude.
-- **Naming.** The browser asks OpenStreetMap Nominatim's `/reverse` endpoint (free,
-  no key, about 1 request per second, attribution required) for a city-level
-  suggestion: "Locality, State" in the US and "Locality, Country" elsewhere. It is
-  only a suggestion. The name is always editable, and a failed lookup leaves the
-  field blank for typing.
-- **API.** `place` on `POST`/`PATCH /api/post` is `{ id }` or `{ name, latitude,
-  longitude }`. On `PATCH`, `null` clears it and omitting it keeps it.
-- **Not yet:** renaming, merging, or deleting places in the admin; maps; place in RSS.
+- **Naming source.** The browser asks OpenStreetMap Nominatim's `/reverse` (free,
+  no key, about 1 request per second, attribution required) for "Locality, State"
+  in the US or "Locality, Country" elsewhere. It's a suggestion only. A failed
+  lookup leaves the field blank.
+- **API.** `place` on `POST`/`PATCH /api/post` is `{ name, latitude?, longitude? }`.
+  On `PATCH`, `null` clears it and omitting it keeps it.
+- **Not yet:** bulk rename/merge in the admin, maps, place in RSS.
 
 ## Content Workflows Summary
 

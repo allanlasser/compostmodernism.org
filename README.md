@@ -79,7 +79,7 @@ This file is the architectural overview — what the running app actually is.
 │   ├── 002_slug_redirects.sql    # Path → post_id ledger for slug/date renames
 │   ├── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
 │   ├── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
-│   └── 005_places.sql            # places table + nullable posts.place_id
+│   └── 005_places.sql            # posts.latitude/longitude/place_name/place_slug
 ├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
@@ -127,17 +127,18 @@ on which fields are present:
 
 ### Places
 
-A post can carry one place: a row in `places` (`name`, `slug`, `latitude`,
-`longitude`) linked by `posts.place_id`. Many posts share a place, and each place
-has a feed at `/place/[slug]`, linked from the post rail under the dateline.
-Hydrated posts expose only `{ name, slug }`. Coordinates stay in the admin
-loaders (`getPlaces`) and the nightly archive's frontmatter, never in public
-pages or their data.
+Each post can store where it was written in four nullable columns on `posts`:
+`latitude`, `longitude`, `place_name`, and `place_slug` (`slugify(place_name)`).
+Posts sharing a `place_slug` share a feed at `/place/[slug]`, linked from the post
+rail under the dateline. Hydrated posts expose only `place: { name, slug }`.
+Coordinates come only from `getPostLocation` (admin edit loader, nightly archive)
+and `getPlaceNames` (admin autocomplete), never from public pages or their data.
 
-In the admin form, **Use my location** reads `navigator.geolocation`, sorts known
-places nearest first, and pre-selects one within 500 m. Otherwise it picks
-**New place here…** and asks OpenStreetMap Nominatim, from the browser, for an
-editable name suggestion. See SPEC §17.
+In the admin form, **Use my location** reads `navigator.geolocation`. If a known
+place's average position is within 500 m, its name is filled in. Otherwise
+OpenStreetMap Nominatim, called from the browser, suggests a city-level name. The
+field is always editable, and a `<datalist>` offers names already used, nearest
+first. See SPEC §17.
 
 ### Social sharing previews
 
@@ -288,9 +289,8 @@ Creates a new post.
 
 **Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1, place?: Place }`
 
-`Place` is `{ id: number }` to reuse a known place, or `{ name: string, latitude: number, longitude: number }`
-to create one. A new place whose name slugifies to an existing place's slug reuses that place. An unknown
-`id` is a `400`.
+`Place` is `{ name: string, latitude?: number, longitude?: number }`. Latitude and longitude come as a
+pair or not at all. Posts whose names slugify the same are grouped on one place page.
 
 ### `PATCH /api/post/[slug]`
 

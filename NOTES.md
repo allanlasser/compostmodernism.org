@@ -11,9 +11,10 @@ entries go on top.
 a Svelte 5 `bind:value` on the `<select>` never sees it, and neither did a function
 binding. Svelte's select binding reads the selected option via `:checked`, which
 happy-dom doesn't keep in step. Setting `option.selected = true` didn't help either.
-`PlaceField` uses `value={choice}` plus an `onchange` that reads
-`e.currentTarget.value`, which works in both happy-dom and real browsers. Use that
-pattern for any new `<select>` that tests need to drive.
+Use `value={x}` plus an `onchange` that reads `e.currentTarget.value`, which
+works in both happy-dom and real browsers, for any `<select>` that tests need to
+drive. (Found while building the first, select-based version of the place
+picker.)
 
 ---
 
