@@ -2,7 +2,7 @@
 
 # ─── Builder ────────────────────────────────────────────────────────────────
 # Compiles native deps (better-sqlite3, sharp) and runs the SvelteKit build.
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ vips-dev
@@ -15,7 +15,7 @@ RUN npm run build && npm prune --omit=dev
 
 # ─── Runtime ────────────────────────────────────────────────────────────────
 # Slim runtime — copies compiled deps + bundle from builder, no toolchain.
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 
 # libvips runtime — sharp needs it even with prebuilt binaries on alpine

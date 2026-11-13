@@ -1123,7 +1123,7 @@ to the VPS), not a packaging step. The VPS uses Docker Compose v1
 (hyphenated `docker-compose`); see NOTES.md.
 
 ```dockerfile
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache python3 make g++ vips-dev
 COPY package.json package-lock.json ./
@@ -1131,7 +1131,7 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 RUN apk add --no-cache vips
 COPY --from=builder /app/node_modules ./node_modules
@@ -1339,10 +1339,10 @@ jobs:
     name: Build & test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run check
@@ -1354,7 +1354,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run deploy script over SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}

@@ -1605,6 +1605,36 @@ backlog) are only reachable by permalink. Load them as the reader scrolls.
 
 ---
 
+## Phase 22 — Node 22 Base Image
+
+The AWS SDK drops Node 20 for releases after the first week of January 2027
+(issue #18). `@aws-sdk/client-s3` is `^3.0.0`, so the next clean `npm ci` after
+that date could resolve a release the image cannot run, breaking R2 uploads.
+
+### Design decisions (locked before coding)
+
+- **Node 22 in both Docker stages and in CI**, same major everywhere so the gate
+  tests what ships.
+- **No code change.** Nothing here is unit-testable; the red step is the SDK's
+  `NodeVersionSupportWarning` in the production backup log, and the green step is
+  its absence plus a working R2 upload.
+- **Actions bumped in the same pass:** `actions/checkout` and `actions/setup-node`
+  v4 → v7 (both run on node24), clearing the Actions runtime warning.
+- **Node 24 is the follow-up, not this change.** 22 satisfies the SDK and matches
+  local dev; 24 has the longer support window if we want to move again.
+
+### Checkpoint 22
+
+- [x] `npm test` and `npm run check` green on Node 22
+- [ ] PR CI green (exercises the bumped actions and `node-version: 22`)
+- [ ] After deploy: `docker exec compostmodernism node --version` prints v22, and
+      `docker exec compostmodernism npx tsx scripts/export-and-backup.ts` writes the
+      zip and mirrors it to R2 with no `NodeVersionSupportWarning`
+- [ ] Site loads and an image upload still works (`sharp` and `better-sqlite3` are
+      rebuilt on the new base)
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
