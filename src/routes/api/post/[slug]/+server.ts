@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { getPostBySlug, updatePost, deletePost, slugTaken, getPlaceById } from '$lib/db';
+import { getPostBySlug, updatePost, deletePost, slugTaken } from '$lib/db';
 import { isAuthorized } from '$lib/auth';
 import { postUpdateSchema } from '$lib/schemas';
 
@@ -32,10 +32,6 @@ export const PATCH: RequestHandler = async (event) => {
 			{ error: `slug "${newSlug}" is already in use by another post` },
 			{ status: 409 }
 		);
-	}
-
-	if (place && 'id' in place && !getPlaceById(place.id)) {
-		return json({ error: `place ${place.id} does not exist` }, { status: 400 });
 	}
 
 	updatePost(slug, {

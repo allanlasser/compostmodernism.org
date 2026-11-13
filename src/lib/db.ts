@@ -25,7 +25,10 @@ export interface PostRow {
 	url: string | null;
 	created_at: number;
 	draft: number;
-	place_id: number | null;
+	latitude: number | null;
+	longitude: number | null;
+	place_name: string | null;
+	place_slug: string | null;
 }
 
 export interface PublicPlace {
@@ -33,26 +36,24 @@ export interface PublicPlace {
 	slug: string;
 }
 
-export interface PlaceRow extends PublicPlace {
-	id: number;
-	latitude: number;
-	longitude: number;
-	created_at: number;
+export interface PostLocation extends PublicPlace {
+	latitude: number | null;
+	longitude: number | null;
 }
 
-export interface PlaceWithCount extends PlaceRow {
+export interface PlaceName extends PostLocation {
 	count: number;
 }
 
-export interface NewPlace {
+export interface PlaceInput {
 	name: string;
-	latitude: number;
-	longitude: number;
+	latitude?: number | null;
+	longitude?: number | null;
 }
 
-export type PlaceInput = { id: number } | NewPlace;
+type PrivatePlaceColumns = 'latitude' | 'longitude' | 'place_name' | 'place_slug';
 
-export interface Post extends PostRow {
+export interface Post extends Omit<PostRow, PrivatePlaceColumns> {
 	type: 'post';
 	date: number;
 	tags: Tag[];
@@ -161,84 +162,77 @@ export function createDb(path: string) {
 		for (const tagId of tagIds) insert.run(postId, tagId);
 	}
 
-	function getPublicPlace(placeId: number | null): PublicPlace | null {
-		if (placeId === null) return null;
-		const row = raw.prepare('SELECT name, slug FROM places WHERE id = ?').get(placeId) as
-			| PublicPlace
-			| undefined;
-		return row ?? null;
-	}
-
 	function hydrate(row: PostRow): Post {
+		const { latitude: _lat, longitude: _lon, place_name, place_slug, ...rest } = row;
 		return {
-			...row,
+			...rest,
 			type: 'post',
 			date: row.created_at,
 			tags: getTagsForPost(row.id),
-			place: getPublicPlace(row.place_id)
+			place: place_name && place_slug ? { name: place_name, slug: place_slug } : null
 		};
 	}
 
-	function resolvePlaceId(place: PlaceInput | null | undefined): number | null {
-		if (!place) return null;
-		if ('id' in place) return place.id;
+	function placeColumns(place: PlaceInput | null | undefined) {
+		if (!place) return { latitude: null, longitude: null, place_name: null, place_slug: null };
 		const name = place.name.trim();
-		const slug = slugify(name);
-		const existing = raw.prepare('SELECT id FROM places WHERE slug = ?').get(slug) as
-			| { id: number }
-			| undefined;
-		if (existing) return existing.id;
-		return Number(
-			raw
-				.prepare(
-					'INSERT INTO places (name, slug, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?)'
-				)
-				.run(name, slug, place.latitude, place.longitude, Date.now()).lastInsertRowid
-		);
+		return {
+			latitude: place.latitude ?? null,
+			longitude: place.longitude ?? null,
+			place_name: name,
+			place_slug: slugify(name)
+		};
 	}
 
-	function getPlaces(): PlaceWithCount[] {
-		return raw
+	function getPostLocation(postId: number): PostLocation | null {
+		const row = raw
 			.prepare(
-				`SELECT pl.*, COUNT(p.id) AS count, MAX(p.created_at) AS last_used
-				 FROM places pl
-				 LEFT JOIN posts p ON p.place_id = pl.id
-				 GROUP BY pl.id
-				 ORDER BY last_used DESC NULLS LAST, pl.name ASC`
+				`SELECT place_name AS name, place_slug AS slug, latitude, longitude
+				 FROM posts WHERE id = ? AND place_slug IS NOT NULL`
 			)
-			.all()
-			.map((row) => {
-				const { last_used: _, ...place } = row as PlaceWithCount & { last_used: number | null };
-				return place;
-			});
-	}
-
-	function getPlaceById(id: number): PlaceRow | null {
-		const row = raw.prepare('SELECT * FROM places WHERE id = ?').get(id) as PlaceRow | undefined;
+			.get(postId) as PostLocation | undefined;
 		return row ?? null;
 	}
 
+	function getPlaceNames(): PlaceName[] {
+		return raw
+			.prepare(
+				`SELECT
+				   (SELECT place_name FROM posts p2 WHERE p2.place_slug = p.place_slug
+				    ORDER BY created_at DESC, id DESC LIMIT 1) AS name,
+				   place_slug AS slug,
+				   AVG(latitude) AS latitude,
+				   AVG(longitude) AS longitude,
+				   COUNT(*) AS count
+				 FROM posts p
+				 WHERE place_slug IS NOT NULL
+				 GROUP BY place_slug
+				 ORDER BY MAX(created_at) DESC`
+			)
+			.all() as PlaceName[];
+	}
+
 	function getPlaceBySlug(slug: string): PublicPlace | null {
-		const row = raw.prepare('SELECT name, slug FROM places WHERE slug = ?').get(slug) as
-			| PublicPlace
-			| undefined;
+		const row = raw
+			.prepare(
+				`SELECT place_name AS name, place_slug AS slug FROM posts
+				 WHERE place_slug = ? AND draft = 0
+				 ORDER BY created_at DESC, id DESC LIMIT 1`
+			)
+			.get(slug) as PublicPlace | undefined;
 		return row ?? null;
 	}
 
 	function getPostsByPlace(placeSlug: string, { limit = 50 }: { limit?: number } = {}): Post[] | null {
-		const place = raw.prepare('SELECT id FROM places WHERE slug = ?').get(placeSlug) as
-			| { id: number }
-			| undefined;
-		if (!place) return null;
 		const rows = raw
 			.prepare(
 				`SELECT * FROM posts
-				 WHERE place_id = ? AND draft = 0
+				 WHERE place_slug = ? AND draft = 0
 				 ORDER BY created_at DESC, id DESC
 				 LIMIT ?`
 			)
-			.all(place.id, limit) as PostRow[];
-		return rows.map(hydrate);
+			.all(placeSlug, limit) as PostRow[];
+		return rows.length ? rows.map(hydrate) : null;
 	}
 
 	function recordImage(key: string): ImageRow {
@@ -343,18 +337,20 @@ export function createDb(path: string) {
 			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(ts));
 		const result = raw
 			.prepare(
-				`INSERT INTO posts (slug, body, title, url, created_at, draft, place_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)`
+				`INSERT INTO posts (slug, body, title, url, created_at, draft,
+				                    latitude, longitude, place_name, place_slug)
+				 VALUES (@slug, @body, @title, @url, @created_at, @draft,
+				         @latitude, @longitude, @place_name, @place_slug)`
 			)
-			.run(
+			.run({
 				slug,
-				input.body,
-				input.title ?? null,
-				input.url ?? null,
-				ts,
-				input.draft ?? 0,
-				resolvePlaceId(input.place)
-			);
+				body: input.body,
+				title: input.title ?? null,
+				url: input.url ?? null,
+				created_at: ts,
+				draft: input.draft ?? 0,
+				...placeColumns(input.place)
+			});
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
 		setPostImages(id, input.body);
@@ -486,10 +482,8 @@ export function createDb(path: string) {
 
 	function updatePost(slug: string, update: PostUpdate): void {
 		const existing = raw
-			.prepare('SELECT id, slug, created_at, draft, place_id FROM posts WHERE slug = ?')
-			.get(slug) as
-			| { id: number; slug: string; created_at: number; draft: number; place_id: number | null }
-			| undefined;
+			.prepare('SELECT id, slug, created_at, draft FROM posts WHERE slug = ?')
+			.get(slug) as { id: number; slug: string; created_at: number; draft: number } | undefined;
 		if (!existing) return;
 
 		const newSlug = update.slug ?? existing.slug;
@@ -510,7 +504,7 @@ export function createDb(path: string) {
 		}
 
 		raw.prepare(
-			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ?, draft = ?, place_id = ? WHERE id = ?'
+			'UPDATE posts SET body = ?, title = ?, url = ?, slug = ?, created_at = ?, draft = ? WHERE id = ?'
 		).run(
 			update.body,
 			update.title ?? null,
@@ -518,9 +512,15 @@ export function createDb(path: string) {
 			newSlug,
 			newCreatedAt,
 			update.draft ?? existing.draft,
-			update.place === undefined ? existing.place_id : resolvePlaceId(update.place),
 			existing.id
 		);
+
+		if (update.place !== undefined) {
+			raw.prepare(
+				`UPDATE posts SET latitude = @latitude, longitude = @longitude,
+				 place_name = @place_name, place_slug = @place_slug WHERE id = @id`
+			).run({ id: existing.id, ...placeColumns(update.place) });
+		}
 
 		if (Array.isArray(update.tags)) setPostTags(existing.id, update.tags);
 		setPostImages(existing.id, update.body);
@@ -561,8 +561,8 @@ export function createDb(path: string) {
 		touchImage,
 		deleteImage,
 		setPostImages,
-		getPlaces,
-		getPlaceById,
+		getPostLocation,
+		getPlaceNames,
 		getPlaceBySlug,
 		getPostsByPlace
 	};
@@ -609,8 +609,8 @@ export const deleteImage: Db['deleteImage'] = (id) => defaultDb().deleteImage(id
 export const setPostImages: Db['setPostImages'] = (postId, body) =>
 	defaultDb().setPostImages(postId, body);
 export const getPostCadence: Db['getPostCadence'] = () => defaultDb().getPostCadence();
-export const getPlaces: Db['getPlaces'] = () => defaultDb().getPlaces();
-export const getPlaceById: Db['getPlaceById'] = (id) => defaultDb().getPlaceById(id);
+export const getPostLocation: Db['getPostLocation'] = (id) => defaultDb().getPostLocation(id);
+export const getPlaceNames: Db['getPlaceNames'] = () => defaultDb().getPlaceNames();
 export const getPlaceBySlug: Db['getPlaceBySlug'] = (slug) => defaultDb().getPlaceBySlug(slug);
 export const getPostsByPlace: Db['getPostsByPlace'] = (slug, opts) =>
 	defaultDb().getPostsByPlace(slug, opts);

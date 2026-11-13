@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { insertPost, slugTaken, getPlaceById } from '$lib/db';
+import { insertPost, slugTaken } from '$lib/db';
 import { permalink } from '$lib/slug';
 import { isAuthorized } from '$lib/auth';
 import { postInputSchema } from '$lib/schemas';
@@ -22,10 +22,6 @@ export const POST: RequestHandler = async (event) => {
 
 	if (slug && slugTaken(slug)) {
 		return json({ error: `slug "${slug}" is already in use by another post` }, { status: 409 });
-	}
-
-	if (place && 'id' in place && !getPlaceById(place.id)) {
-		return json({ error: `place ${place.id} does not exist` }, { status: 400 });
 	}
 
 	const result = insertPost({ body, title, url, tags, slug, created_at, draft, place });

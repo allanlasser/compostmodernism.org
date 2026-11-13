@@ -124,12 +124,7 @@ describe('feedPageQuerySchema', () => {
 });
 
 describe('place input', () => {
-	it('accepts an existing place by id', () => {
-		const r = postInputSchema.safeParse({ body: 'b', place: { id: 3 } });
-		expect(r.success && r.data.place).toEqual({ id: 3 });
-	});
-
-	it('accepts a new place with trimmed name and coordinates', () => {
+	it('accepts a trimmed name with coordinates', () => {
 		const r = postInputSchema.safeParse({
 			body: 'b',
 			place: { name: '  Cambridge ', latitude: 42.37, longitude: -71.1 }
@@ -137,11 +132,17 @@ describe('place input', () => {
 		expect(r.success && r.data.place).toEqual({ name: 'Cambridge', latitude: 42.37, longitude: -71.1 });
 	});
 
+	it('accepts a name on its own', () => {
+		const r = postInputSchema.safeParse({ body: 'b', place: { name: 'A train somewhere' } });
+		expect(r.success && r.data.place).toEqual({ name: 'A train somewhere' });
+	});
+
 	it.each([
 		{ name: 'x', latitude: 91, longitude: 0 },
 		{ name: 'x', latitude: 0, longitude: -181 },
+		{ name: 'x', latitude: 42 },
 		{ name: '  ', latitude: 0, longitude: 0 },
-		{ id: 0 }
+		{ id: 3 }
 	])('rejects %o', (place) => {
 		expect(postInputSchema.safeParse({ body: 'b', place }).success).toBe(false);
 	});

@@ -14,16 +14,17 @@ const slugSchema = z
 	.string()
 	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase letters, digits, and hyphens');
 
-export const placeInputSchema = z.union([
-	z.object({ id: z.number().int().positive() }).strict(),
-	z
-		.object({
-			name: z.string().trim().min(1, 'place name is required'),
-			latitude: z.number().min(-90).max(90),
-			longitude: z.number().min(-180).max(180)
-		})
-		.strict()
-]);
+export const placeInputSchema = z
+	.object({
+		name: z.string().trim().min(1, 'place name is required'),
+		latitude: z.number().min(-90).max(90).nullish(),
+		longitude: z.number().min(-180).max(180).nullish()
+	})
+	.strict()
+	.refine((p) => (p.latitude == null) === (p.longitude == null), {
+		message: 'latitude and longitude go together',
+		path: ['latitude']
+	});
 
 export type PlaceInputParsed = z.infer<typeof placeInputSchema>;
 

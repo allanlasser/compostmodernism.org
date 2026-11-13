@@ -4,15 +4,14 @@ vi.mock('$lib/db', () => ({
 	getPostBySlug: vi.fn(),
 	updatePost: vi.fn(),
 	deletePost: vi.fn(),
-	slugTaken: vi.fn(),
-	getPlaceById: vi.fn()
+	slugTaken: vi.fn()
 }));
 vi.mock('$env/dynamic/private', () => ({
 	env: { POST_SECRET: 'test-secret' }
 }));
 
 import { PATCH, DELETE } from './+server';
-import { getPostBySlug, updatePost, deletePost, slugTaken, getPlaceById } from '$lib/db';
+import { getPostBySlug, updatePost, deletePost, slugTaken } from '$lib/db';
 
 const mockGet = vi.mocked(getPostBySlug);
 const mockUpdate = vi.mocked(updatePost);
@@ -44,7 +43,6 @@ const existing = {
 	type: 'post' as const,
 	date: 1700000000000,
 	tags: [],
-	place_id: null,
 	place: null
 };
 
@@ -288,16 +286,5 @@ describe('PATCH /api/post/[slug] place', () => {
 		} as never);
 		expect(res.status).toBe(200);
 		expect(mockUpdate).toHaveBeenCalledWith('hello', expect.objectContaining({ place: null }));
-	});
-
-	it('400 when place id does not exist', async () => {
-		mockGet.mockReturnValue(existing);
-		vi.mocked(getPlaceById).mockReturnValue(null);
-		const res = await PATCH({
-			request: req({ place: { id: 42 } }, 'Bearer test-secret'),
-			params: { slug: 'hello' },
-			cookies: cookies()
-		} as never);
-		expect(res.status).toBe(400);
 	});
 });

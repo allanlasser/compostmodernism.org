@@ -7,12 +7,12 @@ import {
 	S3Client,
 	type PutObjectCommandInput
 } from '@aws-sdk/client-s3';
-import { createDb, type PlaceRow, type Post } from '../src/lib/db';
+import { createDb, type PostLocation, type Post } from '../src/lib/db';
 import { dateParts, permalink } from '../src/lib/slug';
 
 export const SITE_ORIGIN = 'https://compostmodernism.org';
 
-export function renderFrontmatter(post: Post, place?: PlaceRow | null): string {
+export function renderFrontmatter(post: Post, place?: PostLocation | null): string {
 	const lines = [
 		'---',
 		`id: ${post.id}`,
@@ -27,12 +27,10 @@ export function renderFrontmatter(post: Post, place?: PlaceRow | null): string {
 		for (const tag of post.tags) lines.push(`  - ${tag.name}`);
 	}
 	if (place) {
-		lines.push(
-			'place:',
-			`  name: ${JSON.stringify(place.name)}`,
-			`  latitude: ${place.latitude}`,
-			`  longitude: ${place.longitude}`
-		);
+		lines.push('place:', `  name: ${JSON.stringify(place.name)}`);
+		if (place.latitude !== null && place.longitude !== null) {
+			lines.push(`  latitude: ${place.latitude}`, `  longitude: ${place.longitude}`);
+		}
 	}
 	lines.push('---', '', post.body, '');
 	return lines.join('\n');
@@ -51,13 +49,16 @@ export function r2Key(date: Date): string {
 	return `backups/${archiveFilename(date)}`;
 }
 
-export function buildArchive(posts: Post[], dbBytes: Buffer, places: PlaceRow[] = []): Buffer {
-	const placesById = new Map(places.map((p) => [p.id, p]));
+export function buildArchive(
+	posts: Post[],
+	dbBytes: Buffer,
+	locations: Map<number, PostLocation> = new Map()
+): Buffer {
 	const zip = new AdmZip();
 	zip.addFile('posts.db', dbBytes);
 	for (const post of posts) {
-		const place = post.place_id === null ? null : placesById.get(post.place_id);
-		zip.addFile(archiveEntryPath(post), Buffer.from(renderFrontmatter(post, place), 'utf8'));
+		const md = renderFrontmatter(post, locations.get(post.id));
+		zip.addFile(archiveEntryPath(post), Buffer.from(md, 'utf8'));
 	}
 	return zip.toBuffer();
 }
@@ -85,12 +86,16 @@ async function main(): Promise<void> {
 	const dbPath = join(process.cwd(), 'posts.db');
 	const db = createDb(dbPath);
 	const posts = db.getPosts({ limit: 1_000_000 });
-	const places = db.getPlaces();
+	const locations = new Map<number, PostLocation>();
+	for (const post of posts) {
+		const location = db.getPostLocation(post.id);
+		if (location) locations.set(post.id, location);
+	}
 	db.raw.close();
 
 	const now = new Date();
 	const dbBytes = readFileSync(dbPath);
-	const zipBuffer = buildArchive(posts, dbBytes, places);
+	const zipBuffer = buildArchive(posts, dbBytes, locations);
 
 	const filename = archiveFilename(now);
 	const localPath = join(process.cwd(), 'archive', filename);

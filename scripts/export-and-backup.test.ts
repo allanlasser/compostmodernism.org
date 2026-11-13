@@ -24,7 +24,6 @@ function post(overrides: Partial<Post> = {}): Post {
 		date: Date.UTC(2024, 6, 1, 12, 0, 0),
 		tags: [],
 		draft: 0,
-		place_id: null,
 		place: null,
 		...overrides
 	};
@@ -32,15 +31,23 @@ function post(overrides: Partial<Post> = {}): Post {
 
 describe('renderFrontmatter', () => {
 	it('includes the place name and coordinates when given one', () => {
-		const md = renderFrontmatter(post({ place_id: 3 }), {
-			id: 3,
+		const md = renderFrontmatter(post(), {
 			name: 'Lisbon, Portugal',
 			slug: 'lisbon-portugal',
 			latitude: 38.7223,
-			longitude: -9.1393,
-			created_at: 0
+			longitude: -9.1393
 		});
 		expect(md).toContain('place:\n  name: "Lisbon, Portugal"\n  latitude: 38.7223\n  longitude: -9.1393\n');
+	});
+
+	it('includes a place name typed without coordinates', () => {
+		const md = renderFrontmatter(post(), {
+			name: 'A train somewhere',
+			slug: 'a-train-somewhere',
+			latitude: null,
+			longitude: null
+		});
+		expect(md).toContain('place:\n  name: "A train somewhere"\n---');
 	});
 
 	it('renders id, slug, created_at, and absolute permalink', () => {
