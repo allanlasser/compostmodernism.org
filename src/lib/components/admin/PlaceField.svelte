@@ -107,7 +107,7 @@
 		/>
 		<button
 			type="button"
-			class="button icon"
+			class="icon locate"
 			onclick={locate}
 			disabled={disabled || locating}
 			aria-label="Use my location"
@@ -131,7 +131,7 @@
 			<span>{here.latitude.toFixed(4)}, {here.longitude.toFixed(4)}</span>
 			<button
 				type="button"
-				class="clear"
+				class="icon"
 				onclick={() => (here = null)}
 				{disabled}
 				aria-label="Clear location"
@@ -178,16 +178,28 @@
 		}
 	}
 
-	.button.icon {
-		flex: 0 0 auto;
-		min-width: unset;
-		color: var(--color-ink-soft);
+	.icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.1em;
+		background: transparent;
+		border: 0;
+		border-radius: 3px;
+		color: inherit;
+		cursor: pointer;
 		&:hover:not(:disabled) {
 			color: var(--color-ink);
+			background: var(--color-surface-subtle);
 		}
 	}
 
-	.button.icon :global(.spin) {
+	.locate {
+		flex: 0 0 auto;
+		padding: 0 0.4em;
+	}
+
+	.locate :global(.spin) {
 		animation: spin 1s linear infinite;
 	}
 
@@ -204,20 +216,6 @@
 		margin: 0;
 		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 		font-size: 0.75em;
-	}
-
-	.clear {
-		display: inline-flex;
-		padding: 0.1em;
-		background: transparent;
-		border: 0;
-		border-radius: 3px;
-		color: inherit;
-		cursor: pointer;
-		&:hover:not(:disabled) {
-			color: var(--color-ink);
-			background: var(--color-surface-subtle);
-		}
 	}
 
 	.coordinates a {
