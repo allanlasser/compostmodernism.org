@@ -145,4 +145,13 @@ describe('POST /api/post', () => {
 			tags: ['a']
 		});
 	});
+
+	it('201 forwards a place to insertPost', async () => {
+		const place = 'Lisbon, Portugal';
+		const res = await POST({
+			request: req({ body: 'b', place }, 'Bearer test-secret')
+		} as never);
+		expect(res.status).toBe(201);
+		expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ place }));
+	});
 });

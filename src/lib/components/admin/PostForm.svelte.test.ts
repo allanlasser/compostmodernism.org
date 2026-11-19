@@ -247,4 +247,34 @@ describe('PostForm', () => {
 		const alert = await findByRole('alert');
 		expect(alert.textContent).toContain('Not found');
 	});
+
+	it('create mode: sends a typed place name', async () => {
+		const fetchMock = stubFetchOk({ ok: true, slug: 'here' });
+		const { container, getByRole } = render(PostForm, { props: { mode: 'create' } });
+		await fireEvent.input(container.querySelector('textarea') as HTMLTextAreaElement, {
+			target: { value: 'A post.' }
+		});
+		await fireEvent.input(container.querySelector('input[name="place"]') as HTMLInputElement, {
+			target: { value: 'A train somewhere' }
+		});
+		await fireEvent.click(getByRole('button', { name: 'Publish' }));
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+		expect(body.place).toBe('A train somewhere');
+	});
+
+	it('edit mode: emptying the place name sends null', async () => {
+		const fetchMock = stubFetchOk({ ok: true });
+		const { container, getByRole } = render(PostForm, {
+			props: {
+				mode: 'edit',
+				initial: { slug: 'existing', body: 'b', place: 'Home' }
+			}
+		});
+		await fireEvent.input(container.querySelector('input[name="place"]') as HTMLInputElement, {
+			target: { value: '' }
+		});
+		await fireEvent.click(getByRole('button', { name: 'Save' }));
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+		expect(body.place).toBeNull();
+	});
 });

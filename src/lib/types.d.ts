@@ -10,6 +10,7 @@ export interface Post {
   url: string | null;
   date: number;
   tags: Tag[];
+  place?: string | null;
   permalink: string;
 }
 

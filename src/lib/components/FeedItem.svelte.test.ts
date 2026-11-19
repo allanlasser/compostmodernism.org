@@ -173,4 +173,11 @@ describe('FeedItem', () => {
 		expect(extra).not.toBeNull();
 		expect(extra?.textContent).toBe('EXTRA');
 	});
+
+	it('shows the place in the rail', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ place: 'Cambridge, Massachusetts' }) }
+		});
+		expect(container.querySelector('.rail .place')?.textContent).toBe('Cambridge, Massachusetts');
+	});
 });

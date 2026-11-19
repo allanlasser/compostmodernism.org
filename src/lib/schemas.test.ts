@@ -122,3 +122,19 @@ describe('feedPageQuerySchema', () => {
 		}
 	});
 });
+
+describe('place input', () => {
+	it('accepts a trimmed name', () => {
+		const r = postInputSchema.safeParse({ body: 'b', place: '  Cambridge ' });
+		expect(r.success && r.data.place).toBe('Cambridge');
+	});
+
+	it.each(['  ', '', { name: 'Cambridge' }, 3])('rejects %o', (place) => {
+		expect(postInputSchema.safeParse({ body: 'b', place }).success).toBe(false);
+	});
+
+	it('accepts null on update to clear the place', () => {
+		const r = postUpdateSchema.safeParse({ place: null });
+		expect(r.success && r.data.place).toBeNull();
+	});
+});

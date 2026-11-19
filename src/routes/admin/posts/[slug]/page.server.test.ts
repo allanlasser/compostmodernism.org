@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Post } from '$lib/db';
 
-vi.mock('$lib/db', () => ({ getPostBySlug: vi.fn() }));
+vi.mock('$lib/db', () => ({
+	getPostBySlug: vi.fn(),
+	getPlaceNames: vi.fn(() => [])
+}));
 
 import { load } from './+page.server';
-import { getPostBySlug } from '$lib/db';
+import { getPostBySlug, getPlaceNames } from '$lib/db';
 
 const mockGet = vi.mocked(getPostBySlug);
 
@@ -21,6 +24,7 @@ function makePost(over: Partial<Post> = {}): Post {
 		type: 'post',
 		date: created_at,
 		tags: [],
+		place: null,
 		...over
 	};
 }
@@ -50,5 +54,12 @@ describe('admin edit-post loader', () => {
 		await expect(load({ params: { slug: 'nope' } } as never)).rejects.toMatchObject({
 			status: 404
 		});
+	});
+
+	it('returns known place names', async () => {
+		vi.mocked(getPlaceNames).mockReturnValue(['Home']);
+		mockGet.mockReturnValue(makePost());
+		const result = (await load({ params: { slug: 'hello' } } as never)) as { places: unknown[] };
+		expect(result.places).toEqual(['Home']);
 	});
 });

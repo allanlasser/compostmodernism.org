@@ -10,10 +10,11 @@
 		permalink: string;
 		shortlink: string;
 		date: number;
+		place?: string | null;
 	}
 
 	interface Props {
-		data: { post: PostData };
+		data: { post: PostData; places?: string[] };
 	}
 
 	let { data }: Props = $props();
@@ -30,7 +31,7 @@
   </p>
 </header>
 
-<PostForm mode="edit" initial={data.post} />
+<PostForm mode="edit" initial={data.post} places={data.places} />
 
 <style>
 	.edit-header {

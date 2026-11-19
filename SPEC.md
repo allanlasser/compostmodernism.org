@@ -1701,6 +1701,28 @@ published after inspection.
   and are not in the ledger. Sanity's own links are never left in a body.
 - **Idempotence.** Re-running skips posts whose slug already exists.
 
+## 17. Place
+
+Journal entries are written somewhere, and the place is part of the entry. A post
+can carry a place name.
+
+- **One column on `posts`, not a table.** `place`, nullable free text. Every entry
+  is written somewhere new, so there's no shared row to pick or maintain. (Earlier
+  drafts had a `places` table, then `place_name`/`place_slug` columns with a
+  `/place/[slug]` feed, a geolocation button and Nominatim reverse-geocoding. All
+  were cut: the feature is one line of metadata, and none of it was needed to show
+  that line.)
+- **Names only, no coordinates.** Exact coordinates can reveal a home address, and
+  nothing here needs them.
+- **No place pages.** The place is display text in the post rail, not a link, and
+  there is no grouping or slug. If a place feed is wanted later, add a slug column
+  then (and a migration), not before.
+- **Consistent names.** The admin field offers a `<datalist>` of names already
+  used, so the same place isn't typed two ways.
+- **API.** `place` on `POST`/`PATCH /api/post` is a plain string. On `PATCH`, `null`
+  clears it and omitting it keeps it.
+- **Not yet:** place pages, maps, place in RSS.
+
 ## Content Workflows Summary
 
 ### Plain note (phone)

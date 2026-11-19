@@ -59,13 +59,13 @@
 		--leading-lede: 35px;
 	}
 
-	--space-rail: 160px;
+	--space-rail: 240px;
 	--space-gap: 48px;
 	--space-stack: 13px;
 	--space-section: 32px;
 	--space-header: 64px;
 
-	--content-max: 840px;
+	--content-max: 960px;
 }
 
 *,
