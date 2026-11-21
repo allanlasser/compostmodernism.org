@@ -108,7 +108,14 @@ html {
 
 a {
 	color: inherit;
+	text-decoration-line: underline;
+	text-decoration-color: var(--color-border);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
 	text-decoration-skip-ink: auto;
+	&:hover {
+		text-decoration-color: currentColor;
+	}
 }
 
 p {

@@ -48,12 +48,7 @@
 	}
 
 	.meta a {
-		text-decoration: none;
 		font-style: italic;
-	}
-
-	.meta a:hover {
-		text-decoration: underline;
 	}
 
 	.meta {

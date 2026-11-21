@@ -34,11 +34,6 @@
 	}
 
 	.back {
-		text-decoration: none;
 		font-style: italic;
-	}
-
-	.back:hover {
-		text-decoration: underline;
 	}
 </style>

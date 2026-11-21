@@ -68,12 +68,7 @@
 	}
 
 	.pager a {
-		text-decoration: none;
 		font-style: italic;
-	}
-
-	.pager a:hover {
-		text-decoration: underline;
 	}
 
 	.pager .status,
