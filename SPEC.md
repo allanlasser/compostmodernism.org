@@ -1714,8 +1714,8 @@ can carry a place name.
   that line.)
 - **Names only, no coordinates.** Exact coordinates can reveal a home address, and
   nothing here needs them.
-- **No place pages.** The place is display text in the post rail, not a link, and
-  there is no grouping or slug. If a place feed is wanted later, add a slug column
+- **No place pages.** The place is display text at the top of the post's content,
+  not in the rail, where every item is a link. There is no grouping or slug. If a place feed is wanted later, add a slug column
   then (and a migration), not before.
 - **Consistent names.** The admin field offers a `<datalist>` of names already
   used, so the same place isn't typed two ways.

@@ -127,8 +127,8 @@ on which fields are present:
 ### Place
 
 Each post can store where it was written in one nullable `place` column on `posts`,
-a free-text name such as `Lisbon, Portugal`. It shows in the post rail under the
-dateline. In the admin form it's a plain text input with a `<datalist>` of names
+a free-text name such as `Lisbon, Portugal`. It shows as a small line of
+metadata at the top of the post, above the title and body. In the admin form it's a plain text input with a `<datalist>` of names
 already used (`getPlaceNames`, most recently used first). See SPEC §17.
 
 ### Social sharing previews

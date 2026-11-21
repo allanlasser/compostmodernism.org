@@ -1638,7 +1638,7 @@ that date could resolve a release the image cannot run, breaking R2 uploads.
 ## Phase 23 — Place
 
 Every journal entry gets written somewhere. Each post can store where, as a
-free-text name shown in the post rail.
+free-text name shown at the top of the post.
 
 ### Design decisions (locked before coding)
 
@@ -1649,7 +1649,7 @@ free-text name shown in the post rail.
   that already applied an older 005 must be wiped, since migrations are tracked by
   `user_version`.)
 - **Names only, no coordinates.**
-- **No place pages.** The place is plain text in the rail.
+- **No place pages.** The place is plain text at the start of the post content, not in the rail.
 - **Naming:** a plain text input with a `<datalist>` of names already used.
 - **API:** `POST`/`PATCH /api/post` accept `place` as a plain string. On PATCH,
   `null` clears it and omitting it keeps it.
@@ -1664,7 +1664,7 @@ free-text name shown in the post rail.
 23.4 db: getPlaceNames lists each distinct name once, most recently used first
 23.5 schema: place is a non-blank trimmed string; null on update
 23.6 api: POST and PATCH pass place through
-23.7 FeedItem: renders the place in the rail
+23.7 FeedItem: renders the place first in the content
 23.8 PlaceField: shows the initial name; datalist lists known names
 23.9 PostForm: sends place on create; clearing on edit sends null
 23.10 export: frontmatter includes place
@@ -1674,7 +1674,7 @@ free-text name shown in the post rail.
 
 - [x] `npm test` and `npm run check` green
 - [ ] Manual browser pass: wipe `posts.db`, restart the dev server, create a post
-      with a place, see it in the rail, edit it, clear it, and see the datalist
+      with a place, see it at the top of the post, edit it, clear it, and see the datalist
       offer it on the next post
 - [x] README (API table, layout, Place), SPEC §17, NOTES updated
 

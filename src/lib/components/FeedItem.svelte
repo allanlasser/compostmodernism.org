@@ -60,6 +60,9 @@
 	class:post--plain={!post.url && !post.title}
 >
 	<div class="content">
+    {#if post.place}
+      <span class="place">{post.place}</span>
+    {/if}
     {#if post.title}
       <h2>
         {#if post.url}
@@ -83,9 +86,6 @@
     <a class="permalink" href={post.permalink}>
       <Dateline date={post.date} />
     </a>
-    {#if post.place}
-      <span class="place">{post.place}</span>
-    {/if}
     <TagList tags={post.tags} />
     {#if rail}{@render rail()}{/if}
 	</aside>
@@ -258,6 +258,11 @@
     align-items: baseline;
     gap: 0.125em;
 	}
+
+  .place {
+		font-size: var(--size-meta);
+		color: var(--color-ink-soft);
+  }
 
   .rail a {
     font-style: italic;
