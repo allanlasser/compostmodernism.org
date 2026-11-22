@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { PostPreview } from '$lib/preview';
+
 	interface Row {
 		slug: string;
 		body: string;
@@ -6,6 +8,7 @@
 		date: number;
 		tags: { name: string; slug: string }[];
 		permalink: string;
+		preview: PostPreview;
 	}
 
 	interface Props {
@@ -13,12 +16,6 @@
 	}
 
 	let { posts }: Props = $props();
-
-	function preview(p: Row): string {
-		if (p.title) return p.title;
-		const cleaned = p.body.split('\n')[0].replace(/\s+/g, ' ').trim();
-		return cleaned.length > 80 ? cleaned.slice(0, 70).trim() + '…' : cleaned;
-	}
 </script>
 
 <table class="posts-table">
@@ -33,7 +30,16 @@
 		{#each posts as post (post.slug)}
 			<tr>
 				<td class="post-cell">
-					<a href="/admin/posts/{post.slug}" class="post-link {post.title ? "post-title" : ""}">{preview(post)}</a>
+					<a href="/admin/posts/{post.slug}" class="post-link">
+						{#if post.preview.image}
+							<img class="thumb" src={post.preview.image.src} alt={post.preview.image.alt} loading="lazy" />
+						{/if}
+						{#if post.title}
+							<span class="post-text post-title">{post.title}</span>
+						{:else if post.preview.text}
+							<span class="post-text">{post.preview.text}</span>
+						{/if}
+					</a>
 				</td>
 				<td class="date-cell">
 					<time datetime={new Date(post.date).toISOString()}>
@@ -88,8 +94,28 @@
   }
 
 	.post-link {
+		display: block;
 		font-weight: 500;
 		font-size: var(--size-body);
+	}
+
+	.thumb {
+		display: block;
+		width: 100%;
+		max-width: 16rem;
+		height: 4rem;
+		object-fit: cover;
+		border-radius: 2px;
+	}
+
+	.post-text {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.thumb + .post-text {
+		margin-top: 0.35em;
 	}
 
 
@@ -121,6 +147,9 @@
 
 		.post-link {
 			font-size: 14px;
+		}
+
+		.post-text {
 			display: -webkit-box;
 			-webkit-box-orient: vertical;
 			-webkit-line-clamp: 2;

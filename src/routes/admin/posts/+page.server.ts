@@ -1,6 +1,7 @@
 import type { ServerLoad } from '@sveltejs/kit';
 import { getPosts, countPosts, getPostCadence } from '$lib/db';
 import { permalink } from '$lib/slug';
+import { postPreview } from '$lib/preview';
 
 export const _PER_PAGE = 25;
 
@@ -14,7 +15,7 @@ export const load: ServerLoad = async ({ url }) => {
 
 	const posts = getPosts({ limit: _PER_PAGE, offset });
 	return {
-		posts: posts.map((p) => ({ ...p, permalink: permalink(p) })),
+		posts: posts.map((p) => ({ ...p, permalink: permalink(p), preview: postPreview(p.body) })),
 		page,
 		perPage: _PER_PAGE,
 		total,

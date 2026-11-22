@@ -46,6 +46,16 @@ beforeEach(() => {
 });
 
 describe('admin posts loader', () => {
+	it('attaches a preview to each row', async () => {
+		mockGetPosts.mockReturnValue([makePost({ title: null, body: '![](https://static.example/a.jpg)\n\nHi there' })]);
+		mockCountPosts.mockReturnValue(1);
+		const data = (await load(makeEvent() as never)) as { posts: { preview: unknown }[] };
+		expect(data.posts[0].preview).toEqual({
+			image: { src: 'https://static.example/a.jpg', alt: '' },
+			text: 'Hi there'
+		});
+	});
+
 	it('loads page 1 by default with _PER_PAGE limit and offset 0', async () => {
 		mockGetPosts.mockReturnValue([makePost()]);
 		mockCountPosts.mockReturnValue(7);

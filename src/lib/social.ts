@@ -45,7 +45,7 @@ function decodeEntities(s: string): string {
 	});
 }
 
-function attr(tag: string, name: string): string | undefined {
+export function attr(tag: string, name: string): string | undefined {
 	const m = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'));
 	if (!m) return undefined;
 	return decodeEntities(m[1] ?? m[2]);
@@ -62,7 +62,7 @@ function firstImage(html: string, siteUrl: string): { src: string; alt?: string 
 	}
 }
 
-function plainText(html: string): string {
+export function plainText(html: string): string {
 	const text = html
 		.replace(/<\/(p|div|li|h[1-6]|blockquote|pre)>/gi, ' ')
 		.replace(/<br\s*\/?>/gi, ' ')
@@ -70,7 +70,7 @@ function plainText(html: string): string {
 	return decodeEntities(text).replace(/\s+/g, ' ').trim();
 }
 
-function truncate(text: string, limit: number): string {
+export function truncate(text: string, limit: number): string {
 	if (text.length <= limit) return text;
 	const cut = text.slice(0, limit + 1);
 	const lastSpace = cut.lastIndexOf(' ');
