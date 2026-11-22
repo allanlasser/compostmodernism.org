@@ -1705,6 +1705,40 @@ opened on its oldest weeks.
 
 ---
 
+## Phase 25 — Admin Post Previews
+
+Untitled rows in the admin table showed raw markdown (`![](https://…)`,
+`[Katie Mack](…)`), so image posts were unrecognizable.
+
+### Design decisions (locked before coding)
+
+- **Preview is computed server-side** in the admin posts loader by a pure
+  `postPreview(body)` in `src/lib/preview.ts`, reusing the HTML helpers in
+  `social.ts`.
+- **Thumbnail only when the post leads with an image:** the rendered body's
+  first block is a paragraph that opens with `<img>`. Applies to titled
+  and untitled rows. It sits above the text as a small cropped strip.
+- **Snippet is plain text:** markdown rendered, tags stripped, entities
+  decoded, truncated on a word boundary. Titled rows still show the title.
+  An image-only post shows only its thumbnail.
+
+### Red → Green cycles
+
+```
+25.1 postPreview: leading image → image src/alt; text excludes image
+25.2 postPreview: image not first → no image
+25.3 postPreview: markdown links render as their text; long text truncates with …
+25.4 admin posts load: each row carries preview
+25.5 PostsTable: leading image renders an <img> inside the row link; snippet is preview text
+```
+
+### Checkpoint 25
+
+- [x] `npm test` and `npm run check` green
+- [ ] Manual pass: image posts show a thumbnail; link posts read as prose
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

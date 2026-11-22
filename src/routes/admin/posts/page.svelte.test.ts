@@ -10,7 +10,8 @@ const post = {
 	title: 'T',
 	date: Date.UTC(2026, 0, 15),
 	tags: [],
-	permalink: '/2026/01/15/s'
+	permalink: '/2026/01/15/s',
+	preview: { image: null, text: 'b' }
 };
 
 describe('admin posts page', () => {

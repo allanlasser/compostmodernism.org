@@ -8,11 +8,14 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function row(over: Partial<{ slug: string; title: string | null; body: string; tags: { name: string; slug: string }[]; permalink: string; date: number }> = {}) {
+type Preview = { image: { src: string; alt: string } | null; text: string };
+
+function row(over: Partial<{ slug: string; title: string | null; body: string; preview: Preview; tags: { name: string; slug: string }[]; permalink: string; date: number }> = {}) {
 	return {
 		slug: 'hello',
 		title: 'Hello',
 		body: 'body',
+		preview: { image: null, text: 'body' } as Preview,
 		tags: [],
 		permalink: '/2026/01/15/hello',
 		date: Date.UTC(2026, 0, 15),
@@ -31,19 +34,29 @@ describe('PostsTable', () => {
 		expect(container.querySelector('a[href="/admin/posts/b"]')).not.toBeNull();
 	});
 
-	it('falls back to body preview when title is null', () => {
+	it('shows the preview text when title is null', () => {
 		const { container } = render(PostsTable, {
-			props: { posts: [row({ title: null, body: 'plain prose preview' })] }
+			props: { posts: [row({ title: null, preview: { image: null, text: 'plain prose preview' } })] }
 		});
 		expect(container.textContent).toContain('plain prose preview');
 	});
 
-	it('truncates long body previews', () => {
-		const long = 'a'.repeat(200);
+	it('renders the leading image as a thumbnail inside the row link', () => {
 		const { container } = render(PostsTable, {
-			props: { posts: [row({ title: null, body: long })] }
+			props: {
+				posts: [
+					row({
+						slug: 'pic',
+						title: null,
+						preview: { image: { src: 'https://static.example/a.jpg', alt: 'A spider' }, text: 'In the garden' }
+					})
+				]
+			}
 		});
-		expect(container.textContent).toContain('…');
+		const img = container.querySelector('a[href="/admin/posts/pic"] img');
+		expect(img?.getAttribute('src')).toBe('https://static.example/a.jpg');
+		expect(img?.getAttribute('alt')).toBe('A spider');
+		expect(container.textContent).toContain('In the garden');
 	});
 
 	it('shows empty state when posts is empty', () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PostsTable from '$lib/components/admin/PostsTable.svelte';
 	import CadenceGraph from '$lib/components/admin/CadenceGraph.svelte';
+	import type { PostPreview } from '$lib/preview';
 
 	interface AdminPost {
 		slug: string;
@@ -9,6 +10,7 @@
 		date: number;
 		tags: { name: string; slug: string }[];
 		permalink: string;
+		preview: PostPreview;
 	}
 
 	interface Props {
