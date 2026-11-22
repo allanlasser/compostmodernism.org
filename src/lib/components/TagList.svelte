@@ -26,16 +26,11 @@
 		color: var(--color-ink-soft);
 	}
 
-	.tags a {
-		text-decoration: none;
-	}
-
 	.tags a::before {
 		content: '#';
 	}
 
 	.tags a:hover {
-		text-decoration: underline;
     color: var(--color-ink);
 	}
 </style>

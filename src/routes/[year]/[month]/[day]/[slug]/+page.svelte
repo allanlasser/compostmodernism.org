@@ -41,9 +41,5 @@
     font-size: var(--size-meta);
     color: var(--color-ink-soft);
     font-style: italic;
-    text-decoration: none;
-    &:hover {
-      text-decoration: underline;
-    }
   }
 </style>

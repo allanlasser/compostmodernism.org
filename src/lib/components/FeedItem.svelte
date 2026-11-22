@@ -60,6 +60,9 @@
 	class:post--plain={!post.url && !post.title}
 >
 	<div class="content">
+    {#if post.place}
+      <span class="place">{post.place}</span>
+    {/if}
     {#if post.title}
       <h2>
         {#if post.url}
@@ -160,8 +163,6 @@
 
 	.body :global(a) {
 		color: var(--color-ink-soft);
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
 	}
 
   .body :global(a:hover) {
@@ -233,17 +234,6 @@
 		line-height: 1.4;
 	}
 
-	.post--link h2 a {
-		text-decoration: none;
-	}
-
-	.post--link h2 a:hover {
-		text-decoration: underline;
-    text-decoration-color: var(--color-ink-soft);
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-	}
-
 	.post--link .link-marker {
 		color: var(--color-ink-soft);
 	}
@@ -256,14 +246,17 @@
     gap: 0.125em;
 	}
 
+  .place {
+		font-size: var(--size-meta);
+		color: var(--color-ink-soft);
+  }
+
   .rail a {
     font-style: italic;
 		font-size: var(--size-meta);
 		color: var(--color-ink-soft);
-    text-decoration: none;
     &:hover {
       color: var(--color-ink);
-		  text-decoration: underline;
     }
   }
 

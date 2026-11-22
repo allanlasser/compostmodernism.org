@@ -59,13 +59,13 @@
 		--leading-lede: 35px;
 	}
 
-	--space-rail: 160px;
+	--space-rail: 240px;
 	--space-gap: 48px;
 	--space-stack: 13px;
 	--space-section: 32px;
 	--space-header: 64px;
 
-	--content-max: 840px;
+	--content-max: 960px;
 }
 
 *,
@@ -108,7 +108,14 @@ html {
 
 a {
 	color: inherit;
+	text-decoration-line: underline;
+	text-decoration-color: var(--color-border);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
 	text-decoration-skip-ink: auto;
+	&:hover {
+		text-decoration-color: currentColor;
+	}
 }
 
 p {

@@ -47,7 +47,7 @@ This file is the architectural overview — what the running app actually is.
 │   │   ├── auth.ts          # timing-safe Bearer token + session cookie check
 │   │   ├── r2.ts            # S3Client + uploadToR2()
 │   │   ├── schemas.ts       # Shared zod schemas (postInputSchema, postUpdateSchema, imageMetadataSchema)
-│   │   └── components/      # FeedItem, Dateline, TagList, SocialMeta + admin/ (PostForm, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
+│   │   └── components/      # FeedItem, Dateline, TagList, SocialMeta + admin/ (PostForm, PlaceField, PostsTable, ImagesTable, ImageUploadModal, AdminNav, SignOut)
 │   ├── routes/
 │   │   ├── +layout.{server.ts,svelte}     # Site chrome, session detection, siteUrl
 │   │   ├── +page.{server.ts,svelte}       # Feed (reverse-chronological)
@@ -77,7 +77,8 @@ This file is the architectural overview — what the running app actually is.
 │   ├── 001_init.sql              # Baseline schema: posts, tags, post_tags, images, post_images
 │   ├── 002_slug_redirects.sql    # Path → post_id ledger for slug/date renames
 │   ├── 003_shortlink_redirects.sql # old_token → post_id ledger for Sqids config migrations
-│   └── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
+│   ├── 004_draft.sql             # posts.draft flag (0 = published, 1 = hidden draft)
+│   └── 005_place.sql             # posts.place (free-text where it was written)
 ├── static/                       # Static assets served at `/` (favicon, etc.)
 ├── Dockerfile                    # Two-stage; runtime stage includes migrations/, scripts/, build/, node_modules/
 ├── docker-compose.yml            # One service, joins external `web` network — no host ports
@@ -122,6 +123,13 @@ on which fields are present:
 - **Link post** — `url` + `title` → title links externally, marker `→` rendered.
 - **Titled post** — `title` only → `<h2>` heading.
 - **Plain post** — body only, no heading.
+
+### Place
+
+Each post can store where it was written in one nullable `place` column on `posts`,
+a free-text name such as `Lisbon, Portugal`. It shows as a small line of
+metadata at the top of the post, above the title and body. In the admin form it's a plain text input with a `<datalist>` of names
+already used (`getPlaceNames`, most recently used first). See SPEC §17.
 
 ### Social sharing previews
 
@@ -270,7 +278,9 @@ Creates a new post.
 | 400 | `{ error }` | Invalid body, or `url` provided without `title` |
 | 201 | `{ ok: true, slug: string, permalink: string }` | Post created |
 
-**Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1 }`
+**Request body:** `{ body: string, title?: string, url?: string, tags?: string[], draft?: 0 | 1, place?: string }`
+
+`place` is a plain name such as `"Lisbon, Portugal"`.
 
 ### `PATCH /api/post/[slug]`
 
@@ -287,7 +297,9 @@ the new canonical permalink.
 | 409 | `{ error }` | Requested `slug` is already in use by another post |
 | 200 | `{ ok: true, slug: string }` | Post updated; `slug` is the current (post-rename) slug |
 
-**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number, draft?: 0 | 1 }`
+**Request body:** `{ body?: string, title?: string | null, url?: string | null, tags?: string[], slug?: string, created_at?: number, draft?: 0 | 1, place?: string | null }`
+
+Omitting `place` keeps the current one; `null` clears it.
 
 ### `DELETE /api/post/[slug]`
 

@@ -1,6 +1,12 @@
 <script lang="ts">
 	import PostForm from '$lib/components/admin/PostForm.svelte';
 
+	interface Props {
+		data?: { places?: string[] };
+	}
+
+	let { data }: Props = $props();
+
 	function onSuccess(slug: string) {
 		if (slug) window.location.href = `/admin/posts/${slug}`;
 	}
@@ -11,7 +17,7 @@
 	<a class="back" href="/admin/posts">← All posts</a>
 </header>
 
-<PostForm mode="create" {onSuccess} />
+<PostForm mode="create" {onSuccess} places={data?.places} />
 
 <style>
 	.new-header {
@@ -28,11 +34,6 @@
 	}
 
 	.back {
-		text-decoration: none;
 		font-style: italic;
-	}
-
-	.back:hover {
-		text-decoration: underline;
 	}
 </style>

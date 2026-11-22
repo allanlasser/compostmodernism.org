@@ -31,8 +31,6 @@
 
 	a {
 		color: var(--color-ink-soft);
-		text-decoration-thickness: 1px;
-		text-underline-offset: 2px;
 		&:hover {
 			color: var(--color-ink);
 		}

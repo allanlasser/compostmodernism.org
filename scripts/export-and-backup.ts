@@ -26,6 +26,7 @@ export function renderFrontmatter(post: Post): string {
 		lines.push('tags:');
 		for (const tag of post.tags) lines.push(`  - ${tag.name}`);
 	}
+	if (post.place) lines.push(`place: ${JSON.stringify(post.place)}`);
 	lines.push('---', '', post.body, '');
 	return lines.join('\n');
 }
@@ -47,7 +48,8 @@ export function buildArchive(posts: Post[], dbBytes: Buffer): Buffer {
 	const zip = new AdmZip();
 	zip.addFile('posts.db', dbBytes);
 	for (const post of posts) {
-		zip.addFile(archiveEntryPath(post), Buffer.from(renderFrontmatter(post), 'utf8'));
+		const md = renderFrontmatter(post);
+		zip.addFile(archiveEntryPath(post), Buffer.from(md, 'utf8'));
 	}
 	return zip.toBuffer();
 }

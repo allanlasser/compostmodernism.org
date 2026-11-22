@@ -1635,6 +1635,51 @@ that date could resolve a release the image cannot run, breaking R2 uploads.
 
 ---
 
+## Phase 23 — Place
+
+Every journal entry gets written somewhere. Each post can store where, as a
+free-text name shown at the top of the post.
+
+### Design decisions (locked before coding)
+
+- **One nullable `place` column on `posts`.** No `places` table, no slug. (Earlier
+  passes used a `places` table, then `place_name`/`place_slug` with a place feed,
+  geolocation and Nominatim. All were cut before merge, and `005_place.sql` was
+  rewritten in place because it had never run outside the branch. A dev `posts.db`
+  that already applied an older 005 must be wiped, since migrations are tracked by
+  `user_version`.)
+- **Names only, no coordinates.**
+- **No place pages.** The place is plain text at the start of the post content, not in the rail.
+- **Naming:** a plain text input with a `<datalist>` of names already used.
+- **API:** `POST`/`PATCH /api/post` accept `place` as a plain string. On PATCH,
+  `null` clears it and omitting it keeps it.
+- **Out of scope:** place pages, bulk rename/merge, maps, RSS.
+
+### Red → Green cycles
+
+```
+23.1 migrate: 005 adds place to posts; existing posts have no place
+23.2 db: insertPost stores the trimmed place; hydrated posts expose it as a string
+23.3 db: updatePost keeps the place when omitted, clears on null, replaces on new input
+23.4 db: getPlaceNames lists each distinct name once, most recently used first
+23.5 schema: place is a non-blank trimmed string; null on update
+23.6 api: POST and PATCH pass place through
+23.7 FeedItem: renders the place first in the content
+23.8 PlaceField: shows the initial name; datalist lists known names
+23.9 PostForm: sends place on create; clearing on edit sends null
+23.10 export: frontmatter includes place
+```
+
+### Checkpoint 23
+
+- [x] `npm test` and `npm run check` green
+- [ ] Manual browser pass: wipe `posts.db`, restart the dev server, create a post
+      with a place, see it at the top of the post, edit it, clear it, and see the datalist
+      offer it on the next post
+- [x] README (API table, layout, Place), SPEC §17, NOTES updated
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.

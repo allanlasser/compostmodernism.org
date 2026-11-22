@@ -21,11 +21,6 @@
 	}
 
 	.admin-nav a {
-		text-decoration: none;
 		font-style: italic;
-	}
-
-	.admin-nav a:hover {
-		text-decoration: underline;
 	}
 </style>

@@ -173,4 +173,13 @@ describe('FeedItem', () => {
 		expect(extra).not.toBeNull();
 		expect(extra?.textContent).toBe('EXTRA');
 	});
+
+	it('shows the place at the start of the content', () => {
+		const { container } = render(FeedItem, {
+			props: { item: item({ title: 'A title', place: 'Cambridge, Massachusetts' }) }
+		});
+		const first = container.querySelector('.content')?.firstElementChild;
+		expect(first?.classList.contains('place')).toBe(true);
+		expect(first?.textContent).toBe('Cambridge, Massachusetts');
+	});
 });

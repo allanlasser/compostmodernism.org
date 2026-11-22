@@ -971,3 +971,41 @@ describe('draft visibility', () => {
 		expect(db.getPostCadence()).toEqual([{ date: '2024-01-05', count: 1 }]);
 	});
 });
+
+describe('place', () => {
+	const kitchen = 'Cambridge, Massachusetts';
+
+	it('adds a place column to posts; posts start with no place', () => {
+		const cols = (db.raw.prepare("PRAGMA table_info('posts')").all() as { name: string }[]).map(
+			(c) => c.name
+		);
+		expect(cols).toContain('place');
+		db.insertPost({ body: 'no place' });
+		expect(db.getPosts()[0].place).toBeNull();
+	});
+
+	it('stores the trimmed place name on the post', () => {
+		const { slug } = db.insertPost({ body: 'hi', place: `  ${kitchen} ` });
+		expect(db.getPostBySlug(slug)!.place).toBe(kitchen);
+	});
+
+	it('updatePost keeps the place when omitted, clears on null, replaces on new input', () => {
+		const { slug } = db.insertPost({ body: 'hi', place: kitchen });
+		db.updatePost(slug, { body: 'edited' });
+		expect(db.getPostBySlug(slug)!.place).toBe(kitchen);
+
+		db.updatePost(slug, { body: 'edited', place: null });
+		expect(db.getPostBySlug(slug)!.place).toBeNull();
+
+		db.updatePost(slug, { body: 'edited', place: 'Lisbon, Portugal' });
+		expect(db.getPostBySlug(slug)!.place).toBe('Lisbon, Portugal');
+	});
+
+	it('getPlaceNames lists each distinct name once, most recently used first', () => {
+		db.insertPost({ body: 'a', place: kitchen, created_at: 1000 });
+		db.insertPost({ body: 'b', place: 'A train somewhere', created_at: 2000 });
+		db.insertPost({ body: 'c', place: kitchen, created_at: 3000 });
+		db.insertPost({ body: 'd', created_at: 4000 });
+		expect(db.getPlaceNames()).toEqual([kitchen, 'A train somewhere']);
+	});
+});

@@ -25,6 +25,7 @@ export interface PostRow {
 	url: string | null;
 	created_at: number;
 	draft: number;
+	place: string | null;
 }
 
 export interface Post extends PostRow {
@@ -41,6 +42,7 @@ export interface PostInput {
 	slug?: string;
 	created_at?: number;
 	draft?: number;
+	place?: string | null;
 }
 
 export interface PostUpdate {
@@ -51,6 +53,7 @@ export interface PostUpdate {
 	slug?: string;
 	created_at?: number;
 	draft?: number;
+	place?: string | null;
 }
 
 export interface LookupOptions {
@@ -135,6 +138,17 @@ export function createDb(path: string) {
 
 	function hydrate(row: PostRow): Post {
 		return { ...row, type: 'post', date: row.created_at, tags: getTagsForPost(row.id) };
+	}
+
+	function getPlaceNames(): string[] {
+		return (
+			raw
+				.prepare(
+					`SELECT place FROM posts WHERE place IS NOT NULL
+					 GROUP BY place ORDER BY MAX(created_at) DESC`
+				)
+				.all() as { place: string }[]
+		).map((r) => r.place);
 	}
 
 	function recordImage(key: string): ImageRow {
@@ -239,10 +253,18 @@ export function createDb(path: string) {
 			: uniqueSlug(input.title ? slugify(input.title) : hashSlug(ts));
 		const result = raw
 			.prepare(
-				`INSERT INTO posts (slug, body, title, url, created_at, draft)
-				 VALUES (?, ?, ?, ?, ?, ?)`
+				`INSERT INTO posts (slug, body, title, url, created_at, draft, place)
+				 VALUES (@slug, @body, @title, @url, @created_at, @draft, @place)`
 			)
-			.run(slug, input.body, input.title ?? null, input.url ?? null, ts, input.draft ?? 0);
+			.run({
+				slug,
+				body: input.body,
+				title: input.title ?? null,
+				url: input.url ?? null,
+				created_at: ts,
+				draft: input.draft ?? 0,
+				place: input.place?.trim() || null
+			});
 		const id = Number(result.lastInsertRowid);
 		setPostTags(id, input.tags ?? []);
 		setPostImages(id, input.body);
@@ -407,6 +429,13 @@ export function createDb(path: string) {
 			existing.id
 		);
 
+		if (update.place !== undefined) {
+			raw.prepare('UPDATE posts SET place = ? WHERE id = ?').run(
+				update.place?.trim() || null,
+				existing.id
+			);
+		}
+
 		if (Array.isArray(update.tags)) setPostTags(existing.id, update.tags);
 		setPostImages(existing.id, update.body);
 	}
@@ -445,7 +474,8 @@ export function createDb(path: string) {
 		updateImage,
 		touchImage,
 		deleteImage,
-		setPostImages
+		setPostImages,
+		getPlaceNames
 	};
 }
 
@@ -490,3 +520,4 @@ export const deleteImage: Db['deleteImage'] = (id) => defaultDb().deleteImage(id
 export const setPostImages: Db['setPostImages'] = (postId, body) =>
 	defaultDb().setPostImages(postId, body);
 export const getPostCadence: Db['getPostCadence'] = () => defaultDb().getPostCadence();
+export const getPlaceNames: Db['getPlaceNames'] = () => defaultDb().getPlaceNames();

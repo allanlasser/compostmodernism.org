@@ -56,24 +56,17 @@
 		padding: var(--space-header) var(--space-gap) 0;
 	}
 
-  .site-header a:hover {
-    text-decoration: underline;
-  }
-
-  a.site-title:hover {
-    text-decoration-color: var(--color-ink-soft);
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-  }
-
 	.site-title {
 		grid-area: title;
 		font-family: var(--font-display);
 		font-style: italic;
 		font-size: var(--size-title);
 		line-height: normal;
-		text-decoration: none;
+		text-decoration-color: transparent;
 		white-space: nowrap;
+		&:hover {
+			text-decoration-color: var(--color-ink-soft);
+		}
 	}
 
   .admin-links,
@@ -98,7 +91,6 @@
   .subscribe-links a,
   .admin-links a,
 	.byline a {
-		text-decoration: none;
     &:hover {
       color: var(--color-ink);
     }

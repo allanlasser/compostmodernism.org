@@ -22,6 +22,7 @@ function makePost(slug: string, over: Partial<Post> = {}): Post {
 		type: 'post',
 		date: created_at,
 		tags: [],
+		place: null,
 		...over
 	};
 }

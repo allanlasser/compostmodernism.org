@@ -88,15 +88,10 @@
   }
 
 	.post-link {
-		text-decoration: none;
 		font-weight: 500;
 		font-size: var(--size-body);
 	}
 
-
-	.post-link:hover {
-		text-decoration: underline;
-	}
 
 	.date-cell {
 		color: var(--color-ink-soft);

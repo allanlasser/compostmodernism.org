@@ -23,11 +23,18 @@ function post(overrides: Partial<Post> = {}): Post {
 		type: 'post',
 		date: Date.UTC(2024, 6, 1, 12, 0, 0),
 		tags: [],
+		draft: 0,
+		place: null,
 		...overrides
 	};
 }
 
 describe('renderFrontmatter', () => {
+	it('includes the place name when given one', () => {
+		const md = renderFrontmatter(post({ place: 'Lisbon, Portugal' }));
+		expect(md).toContain('place: "Lisbon, Portugal"\n---');
+	});
+
 	it('renders id, slug, created_at, and absolute permalink', () => {
 		const md = renderFrontmatter(post());
 		expect(md).toMatch(/^---\n/);
