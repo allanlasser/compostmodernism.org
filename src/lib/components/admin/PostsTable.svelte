@@ -104,6 +104,32 @@
 		font-style: italic;
 	}
 
+	@media (max-width: 640px) {
+		.posts-table {
+			font-size: 13px;
+			line-height: 1.35;
+		}
+
+		.posts-table th,
+		.posts-table td {
+			padding: 0.5em 0.35em;
+		}
+
+		.post-cell {
+			white-space: normal;
+		}
+
+		.post-link {
+			font-size: 14px;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+			overflow-wrap: anywhere;
+		}
+	}
+
 	.muted {
 		color: var(--color-ink-dim);
 	}

@@ -10,6 +10,12 @@
 
 	let { cadence }: Props = $props();
 
+	let wrap: HTMLDivElement;
+
+	$effect(() => {
+		wrap.scrollLeft = wrap.scrollWidth;
+	});
+
 	const CELL = 11;
 	const GAP = 2;
 	const STEP = CELL + GAP;
@@ -125,7 +131,7 @@
 	}
 </script>
 
-<div class="cadence-wrap">
+<div class="cadence-wrap" bind:this={wrap}>
 	<svg
 		width={width}
 		height={height}
