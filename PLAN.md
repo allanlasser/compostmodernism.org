@@ -1680,6 +1680,31 @@ free-text name shown at the top of the post.
 
 ---
 
+## Phase 24 — Admin Posts on Mobile
+
+The admin posts page overflowed a phone's viewport, and the cadence graph
+opened on its oldest weeks.
+
+### Design decisions (locked before coding)
+
+- **Posts table, ≤640px:** the preview wraps and clamps to two lines at
+  `--size-meta`; cells pad tighter. All three columns stay. CSS only.
+- **Cadence graph:** on mount, scroll its wrapper fully right so "now" is in
+  view. Scrolling back in time stays manual.
+
+### Red → Green cycles
+
+```
+24.1 CadenceGraph: on mount, the wrapper's scrollLeft equals its scrollWidth
+```
+
+### Checkpoint 24
+
+- [x] `npm test` and `npm run check` green
+- [ ] Manual phone pass: table fits the viewport; graph opens on the current week
+
+---
+
 ## Deferred Follow-ups
 
 Items punted from earlier phases. Address before final deploy unless noted.
