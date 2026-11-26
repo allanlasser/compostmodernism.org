@@ -69,7 +69,7 @@ Add this line under `services.caddy.volumes:` in
 Then:
 
 ```bash
-cd ~/gateway && docker-compose up -d
+cd ~/gateway && docker compose up -d
 ```
 
 ## 6. DNS
@@ -105,7 +105,7 @@ rewrites the host at the edge, so no Caddyfile changes are needed.
 ```bash
 cd ~/sites/compostmodernism.org
 touch posts.db
-docker-compose up -d
+docker compose up -d
 ```
 
 The first `createDb()` call inside the running container applies all
@@ -211,3 +211,159 @@ If it goes wrong, restore `posts.db` from the zip taken in step 3.
   Then run the job once by hand and confirm `archive/YYYY-MM-DD.zip` exists and
   R2 has `backups/YYYY-MM-DD.zip`.
 - Set a Cloudflare R2 lifecycle rule expiring `backups/` after 90 days.
+
+---
+
+## Migrating cornhill to a fresh host (Ubuntu 18.04 → 24.04)
+
+The old Linode is Ubuntu 18.04 (EOL) on Docker 18.09 with 1 GB RAM / 25 GB disk.
+Rather than hop four LTS releases in place, build a new 24.04 Linode (2 GB / 50 GB,
+same region), move the state across, flip DNS, and keep the old box powered off as
+the rollback. Nothing on the old host changes until step 3.
+
+### 0. Before touching anything
+
+- [ ] Linode Backups snapshot of the old host is **complete** (not just started).
+- [ ] The latest `archive/YYYY-MM-DD.zip` exists and R2 has the matching
+  `backups/` object. This is the restore path if everything else goes wrong.
+- [ ] allanlasser/co-op.computer#62 is ready to merge (all checks green): it pins
+  the compose project name to `coop` and moves the deploy path and commands to
+  `~/sites/co-op.computer` / `docker compose`. The server's uncommitted drift was
+  checked: its `docker-compose.prod.yml` matches #62 apart from the pin, and
+  `Caddyfile.prod` is byte-identical to `main`'s, so nothing needs committing.
+- `~/sites/allanlasser.com` is an older copy; that site is hosted on Vercel and
+  is not migrated.
+
+### 1. Build the new host (old host stays live)
+
+1. Create the Linode: Ubuntu 24.04 LTS, 2 GB, 50 GB, same region, your SSH key.
+2. As root: create `allan` with `sudo` and your key, set the hostname to
+   `cornhill`, then disable password and root SSH login
+   (`PasswordAuthentication no`, `PermitRootLogin no`).
+3. `ufw`: default deny incoming; allow `22/tcp`, `80/tcp`, `443/tcp`, `443/udp`.
+   Docker's published ports bypass `ufw` through its own iptables chain, so
+   publish only what the gateway needs.
+4. `unattended-upgrades` on. Cap logs: `SystemMaxUse=200M` in
+   `/etc/systemd/journald.conf`, and `{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}`
+   in `/etc/docker/daemon.json`. The old host's `/var/log` had grown to 2.6 GB.
+5. Install Docker Engine from Docker's apt repository (`docker-ce`, `docker-compose-plugin`,
+   `docker-buildx-plugin`) and add `allan` to the `docker` group.
+6. `docker network create web`.
+7. `docker login ghcr.io` with a token that has `read:packages`, so the co-op
+   images pull.
+8. Clone both repos into `~/sites/` (`compostmodernism.org`, `co-op.computer`) and
+   copy `~/gateway/` across. Stream the secrets host to host, never printing them,
+   and compare `sha256sum` on both ends: `compostmodernism.org/.env` and
+   `co-op.computer/.env.production` (mode 600).
+9. Edit the gateway's `docker-compose.yml` mount for the co-op Caddyfile to
+   `/home/allan/sites/co-op.computer/Caddyfile.prod`.
+10. **Server → GitHub.** `deploy.sh` and the co-op workflow run `git pull` on the
+    host, so it needs read access. Generate one ed25519 key per repo
+    (`~/.ssh/compostmodernism_deploy`, `~/.ssh/coop_deploy`, no passphrase), add each
+    public half under the repo's Settings → Deploy keys with write access **off**
+    (GitHub accepts a given key on only one repo), and give each repo an
+    `~/.ssh/config` alias (`github-compostmodernism`, `github-coop`) with
+    `IdentitiesOnly yes`. Point each checkout's `origin` at its alias and confirm
+    `ssh -T git@<alias>` greets the right repo.
+11. **CI → server.** Copy the GitHub Actions lines from the old host's
+    `~/.ssh/authorized_keys` (`github-actions-*`, `gha-deploy@compostmodernism`) to
+    the new host's, options intact. Without them Actions cannot SSH in. After the
+    first deploys, check `/var/log/auth.log` for which fingerprints are used and
+    drop the rest.
+
+### 2. Rehearse the restore (old host still live)
+
+Restore into the new host while the old one keeps serving. This proves the data
+moves and the backup is restorable before you depend on either.
+
+- co-op: start only `postgres`, stream `pg_dump -Fc` from the old container into
+  `pg_restore --clean --if-exists --no-owner` on the new one, and compare exact
+  row counts per table. Make the comparison fail on empty input; an
+  empty-vs-empty `diff` passes.
+- Volumes (`coop_backend_media`, `coop_backend_static`, `gateway_caddy_data`):
+  create them with Compose's labels
+  (`--label com.docker.compose.project=<proj> --label com.docker.compose.volume=<name>`),
+  stream `tar` through an Alpine container (`:ro` on the old side), then compare a
+  `sha256sum` over every file.
+- compostmodernism: unzip `posts.db` from the latest `archive/*.zip`, run
+  `PRAGMA integrity_check`, and confirm the post count matches the live site.
+- Start the gateway, `redis`, `backend`, `frontend` and the app, then test with
+  `curl --resolve`. `curl` verifies the certificate chain, so a 200 also proves the
+  restored certs are valid.
+- **Do not start `celery-worker` or `celery-beat`, and do not run
+  `export-and-backup.ts`.** The celery services run on a schedule with the real
+  Mailgun key and could send newsletters twice; the backup job would overwrite
+  today's `backups/` object in R2 with the rehearsal database.
+- `/robots.txt` is a 404 at the origin and 200 on the live site: Cloudflare injects
+  its managed robots.txt at the edge. It is not a regression.
+
+### 3. Cutover (a short maintenance window)
+
+On the **old** host:
+
+1. Snapshot the compostmodernism database with SQLite's backup API (same snippet
+   as §10 step 3, writing to `archive/posts.cutover.db`) so the copy is
+   consistent, then `docker compose stop` in `~/sites/compostmodernism.org`.
+2. co-op: dump Postgres, then stop the stack:
+   ```
+   docker exec coop-postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > coop.dump
+   ```
+   Archive the media and static volumes:
+   ```
+   for v in coop_backend_media coop_backend_static gateway_caddy_data; do
+     docker run --rm -v $v:/v -v "$PWD":/b alpine tar czf /b/$v.tgz -C /v .
+   done
+   ```
+   `gateway_caddy_data` carries the issued certificates, so the new gateway doesn't
+   have to reissue them.
+
+Copy `coop.dump`, the three tarballs, `posts.cutover.db` (as `posts.db`) and
+`archive/` to the new host with `rsync`. On the **new** host:
+
+3. Create and fill the volumes (names must match exactly; the gateway declares
+   `coop_backend_static` and `coop_backend_media` as `external: true`):
+   ```
+   for v in coop_backend_media coop_backend_static; do docker volume create $v; done
+   ```
+   Unpack each tarball into its volume with the reverse `docker run ... tar xzf`.
+   Restore `gateway_caddy_data` the same way into the volume the gateway compose
+   file creates (`docker compose up --no-start` first).
+4. `docker compose up -d postgres` in `~/sites/co-op.computer`, wait until healthy,
+   then `pg_restore --clean --if-exists -U ... -d ... < coop.dump`.
+5. Bring everything up: the gateway, then co-op, then compostmodernism. Use
+   `docker compose`, not `docker-compose`. Start `celery-worker` and `celery-beat`
+   only now, after every container on the old host is stopped.
+6. Before touching DNS, test the new host directly:
+   ```
+   curl --resolve compostmodernism.org:443:<NEW_IP> https://compostmodernism.org/ -I
+   curl --resolve co-op.computer:443:<NEW_IP> https://co-op.computer/ -I
+   ```
+   Then run the §9 smoke test against it.
+7. Flip DNS: in Cloudflare, point the A records for `compostmodernism.org`,
+   `www`, and `co-op.computer` at the new IP. (`cmpst.org` points at a
+   placeholder address and doesn't change.)
+8. Point CI at the new host, in this order:
+   1. Set `VPS_HOST` to the new IP in both GitHub repos.
+   2. On the new host, put the co-op checkout on `main`
+      (`git checkout -B main origin/main`). Its `origin` pull would otherwise try
+      to merge `main` into the feature branch. Do **not** delete
+      `Caddyfile.prod` first: it is already tracked and identical, and the
+      gateway bind-mounts it (see NOTES.md for what deleting it does).
+   3. Merge co-op.computer#62; its deploy job is the first end-to-end check of the
+      new host.
+   4. Merge the PR that changes `scripts/deploy.sh` to `docker compose` here. Before
+      this, a push to `main` here would deploy to the host with the old command.
+9. Reinstall the one cron job from "After everything works" above. Run it by hand
+   and confirm the zip and the R2 object.
+
+**Rollback:** point DNS back at the old IP and `docker compose start` the stacks
+on the old host. Nothing there was modified.
+
+### 4. Decommission (one week later)
+
+- Power off the old Linode for a week and watch for surprises. Then delete it, the
+  Backups snapshot, and the `cornhill` entry in `~/.ssh/config` (or repoint it).
+- Retired on purpose, not migrated: `icecast2` (unreachable, blocked by `ufw`),
+  `nginx` (installed but not running), `certbot` (Caddy issues certificates),
+  and `scripts/langoliers.rb` (silent since June 2022). Revoke the Twitter/X API
+  keys that were hardcoded in it.

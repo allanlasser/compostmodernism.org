@@ -233,9 +233,9 @@ already exists are skipped.
 CI/CD: pushing to `main` runs `.github/workflows/deploy.yml`, which gates on
 `npm run check && npm test && npm run build` and then opens an SSH session to the
 VPS that pipes `scripts/deploy.sh` over stdin. The script does `git pull` and
-`docker-compose up -d --build` — migrations apply on the next `createDb()` call
-during container boot. The VPS uses Docker Compose v1 (`docker-compose`,
-hyphenated); see NOTES.md for the install-time gotcha.
+`docker compose up -d --build` — migrations apply on the next `createDb()` call
+during container boot. The VPS runs current Docker Engine with the `docker compose`
+(v2) plugin, not the old hyphenated `docker-compose`.
 
 Caddy is **not** part of this project's compose stack. It runs in a separate
 `~/gateway/` stack on the VPS; this repo's `Caddyfile` is bind-mounted into that

@@ -5,6 +5,49 @@ entries go on top.
 
 ---
 
+## Recreating a container whose bind-mounted file is missing makes Docker create a directory
+
+During the cornhill cutover, the gateway bind-mounts
+`~/sites/co-op.computer/Caddyfile.prod` into Caddy. I deleted that file (an
+identical copy was tracked in git, and the checkout I ran next did not restore it,
+because git saw no change), then ran `docker compose up -d --force-recreate` on the
+gateway. A missing bind-mount source is not an error: Docker creates a
+**directory** of that name, owned by root. Caddy then failed to load its config and
+both sites refused connections on 443 for a few minutes, with live DNS already
+pointing at the host.
+
+Never delete a file a container bind-mounts, even when a copy exists elsewhere. If
+it happens, `sudo rmdir` the directory, `git checkout -- <file>`, and recreate the
+container. Check `stat -c %F <file>` ("regular file", not "directory") before any
+`--force-recreate`.
+
+---
+
+## Moving the stack to a new host: state lives in bind mounts and project-named volumes
+
+Found while planning the cornhill migration (Ubuntu 18.04 → 24.04):
+
+- compostmodernism.org keeps its state in bind mounts (`./posts.db`, `./archive`),
+  not Docker volumes. Don't `cp` a live `posts.db`: take a snapshot with SQLite's
+  backup API (DEPLOY.md §10 step 3) and move that, or stop the container first.
+  The ghost-inode trap above applies to a replaced file on the destination too.
+- Compose names volumes `<project>_<volume>`, and the project name defaults to the
+  checkout directory. The co-op stack's volumes are `coop_*` because it lives in
+  `/opt/coop`, and the gateway mounts two of them as `external: true`. Moving the
+  checkout without `name: coop` makes Compose create empty `co-opcomputer_*`
+  volumes: the database comes up blank and nothing errors
+  (allanlasser/co-op.computer#61).
+- Docker's published ports bypass `ufw`. `ufw` only guards processes on the host,
+  such as `sshd`; a container's `ports:` entry is reachable even when `ufw` says
+  deny.
+- The "Docker Compose v1" entry below is historical, and partly wrong: on 2026-11-25
+  `docker-compose --version` on cornhill reported v2.29.2 (the standalone binary),
+  while the daemon was still 18.09. The new host has only the `docker compose`
+  plugin, so
+  `scripts/deploy.sh` has to change when it goes live.
+
+---
+
 ## Svelte `bind:value` on `<select>` doesn't fire in happy-dom
 
 `fireEvent.change(select, { target: { value: '7' } })` updates `select.value`, but
