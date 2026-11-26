@@ -346,10 +346,9 @@ Copy `coop.dump`, the three tarballs, `posts.cutover.db` (as `posts.db`) and
    1. Set `VPS_HOST` to the new IP in both GitHub repos.
    2. On the new host, put the co-op checkout on `main`
       (`git checkout -B main origin/main`). Its `origin` pull would otherwise try
-      to merge `main` into the feature branch. Remove the hand-copied
-      `Caddyfile.prod` first, since `main` tracks that file, and recreate the
-      gateway afterwards (`docker compose up -d --force-recreate`): replacing a
-      bind-mounted file leaves the container on the old inode (see NOTES.md).
+      to merge `main` into the feature branch. Do **not** delete
+      `Caddyfile.prod` first: it is already tracked and identical, and the
+      gateway bind-mounts it (see NOTES.md for what deleting it does).
    3. Merge co-op.computer#62; its deploy job is the first end-to-end check of the
       new host.
    4. Merge the PR that changes `scripts/deploy.sh` to `docker compose` here. Before

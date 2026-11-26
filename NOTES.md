@@ -5,6 +5,24 @@ entries go on top.
 
 ---
 
+## Recreating a container whose bind-mounted file is missing makes Docker create a directory
+
+During the cornhill cutover, the gateway bind-mounts
+`~/sites/co-op.computer/Caddyfile.prod` into Caddy. I deleted that file (an
+identical copy was tracked in git, and the checkout I ran next did not restore it,
+because git saw no change), then ran `docker compose up -d --force-recreate` on the
+gateway. A missing bind-mount source is not an error: Docker creates a
+**directory** of that name, owned by root. Caddy then failed to load its config and
+both sites refused connections on 443 for a few minutes, with live DNS already
+pointing at the host.
+
+Never delete a file a container bind-mounts, even when a copy exists elsewhere. If
+it happens, `sudo rmdir` the directory, `git checkout -- <file>`, and recreate the
+container. Check `stat -c %F <file>` ("regular file", not "directory") before any
+`--force-recreate`.
+
+---
+
 ## Moving the stack to a new host: state lives in bind mounts and project-named volumes
 
 Found while planning the cornhill migration (Ubuntu 18.04 → 24.04):
