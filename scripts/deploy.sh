@@ -5,4 +5,4 @@ cd ~/sites/compostmodernism.org
 git fetch origin
 git checkout main
 git pull --ff-only
-docker-compose up -d --build
+docker compose up -d --build

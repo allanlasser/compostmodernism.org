@@ -1117,10 +1117,10 @@ The runtime stage copies `node_modules/`, `build/`, `migrations/`,
 `scripts/`, `src/`, plus `package.json` and `tsconfig.json` — no
 toolchain ships.
 
-The build runs on the VPS during `docker-compose up -d --build`. CI's
+The build runs on the VPS during `docker compose up -d --build`. CI's
 build job is a gate (it verifies the build + tests pass before SSH'ing
-to the VPS), not a packaging step. The VPS uses Docker Compose v1
-(hyphenated `docker-compose`); see NOTES.md.
+to the VPS), not a packaging step. The VPS runs current Docker Engine with
+the `docker compose` (v2) plugin.
 
 ```dockerfile
 FROM node:22-alpine AS builder
@@ -1148,7 +1148,7 @@ CMD ["node", "build/index.js"]
 `COPY migrations/` is required — the server runs `migrate()` on startup
 and the runner throws if the directory is absent. New migrations apply
 in this order: push code → CI build job passes → SSH into VPS →
-`git pull && docker-compose up -d --build` (via `scripts/deploy.sh`) →
+`git pull && docker compose up -d --build` (via `scripts/deploy.sh`) →
 server boot calls `createDb()` → `migrate()` finds files past
 `user_version` and applies them inside transactions before the first
 request lands.
@@ -1184,7 +1184,7 @@ networks:
 ```
 
 The `web` network is owned by the gateway (`~/gateway/docker-compose.yml`).
-This compose file just joins it. If `docker-compose up` errors with
+This compose file just joins it. If `docker compose up` errors with
 "network web not found", start the gateway first.
 
 ### `.env.example`
@@ -1220,11 +1220,11 @@ openssl rand -hex 16   # ADMIN_PASSWORD (or use a memorable passphrase)
 # is available as a CLI convenience if you want to seed the DB before
 # the first request lands.
 touch posts.db
-docker-compose up -d
+docker compose up -d
 
 # Subsequent deploys (done via SSH in GitHub Actions, see scripts/deploy.sh) —
 # migrations apply on container start, no separate step required.
-docker-compose up -d --build
+docker compose up -d --build
 
 # Run the nightly export manually
 docker exec compostmodernism npx tsx scripts/export-and-backup.ts
@@ -1292,7 +1292,7 @@ services:
       - ~/sites/compostmodernism.org/Caddyfile:/etc/caddy/sites/compostmodernism.org.caddy:ro
 ```
 
-Then bounce the gateway: `cd ~/gateway && docker-compose up -d`. Caddy
+Then bounce the gateway: `cd ~/gateway && docker compose up -d`. Caddy
 picks up the new file automatically.
 
 ---
@@ -1302,7 +1302,7 @@ picks up the new file automatically.
 Two jobs: **build** verifies a clean checkout type-checks, tests, and
 builds; **deploy** opens a plain SSH session to the VPS and pipes
 `scripts/deploy.sh` over stdin to `bash -s`. The script does
-`git pull` and `docker-compose up -d --build`. The VPS holds the
+`git pull` and `docker compose up -d --build`. The VPS holds the
 canonical source via a long-lived git checkout under
 `~/sites/compostmodernism.org`. Trigger branch is `main`.
 
@@ -1322,7 +1322,7 @@ cd ~/sites/compostmodernism.org
 git fetch origin
 git checkout main
 git pull --ff-only
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### `.github/workflows/deploy.yml`
@@ -1537,14 +1537,14 @@ nano .env
 # Mount this site's Caddyfile into the gateway (one-time)
 # Add to ~/gateway/docker-compose.yml under services.caddy.volumes:
 #   - ~/sites/compostmodernism.org/Caddyfile:/etc/caddy/sites/compostmodernism.org.caddy:ro
-cd ~/gateway && docker-compose up -d
+cd ~/gateway && docker compose up -d
 cd ~/sites/compostmodernism.org
 
 # Touch posts.db so the bind-mount creates a file (not a directory)
 touch posts.db
 
 # Start the container — createDb() applies pending migrations on boot
-docker-compose up -d
+docker compose up -d
 ```
 
 After this, pushes to `main` are picked up by GitHub Actions, which
